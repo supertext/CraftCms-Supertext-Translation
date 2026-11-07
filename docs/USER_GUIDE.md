@@ -116,3 +116,7 @@ Empty fields are skipped. Entries nested inside CKEditor fields are not translat
 | *The translation could not be saved: …* | Craft refused to save the translated version (e.g. a required field is empty in that site). The reason follows. |
 
 Errors are shown per site: if one site fails, the others are still translated and saved.
+
+## Support
+
+Questions, problems or ideas: use the [Supertext support form](https://integrations.supertext.com/en/support?platform=craft-cms). Mention the version of Craft CMS and of the plugin, what you did and what you expected; an error message helps a lot. You get an answer by email, in your language.

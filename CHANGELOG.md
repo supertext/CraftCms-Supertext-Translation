@@ -11,6 +11,7 @@
 - *Send version information to Supertext* (on by default; `SUPERTEXT_VERSION_REPORTS=0` on the server turns it off): when the settings are saved and after an update, the plugin sends the site URL, the plugin, Craft CMS, PHP and SDK versions, whether a key is set, the key check result and the ping address to Supertext, so Supertext support can see which version you run. No content, no API key and no personal data.
 - Public ping endpoint `actions/supertext-translation/ping` that only echoes Supertext's challenge, so Supertext can check the site is reachable (404 with version reports off).
 - New table `supertext_state` for the key check and the version reports (run `php craft up` after updating).
+- Support: the Supertext support form is linked in the README, the user guide and GitHub's "New issue" page.
 
 ### Changed
 - Tested on PHP 8.5 as well (CI runs PHP 8.2–8.5); the demo runs Craft CMS 5.11.5.1 and CKEditor 5.9.0.
