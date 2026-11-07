@@ -54,7 +54,7 @@ fi
 
 echo "[demo] Applying migrations and project config…"
 if ! craft up > /tmp/up.log 2>&1; then
-  echo "[demo] craft up failed:"; tail -20 /tmp/up.log; exit 1
+  echo "[demo] craft up failed:"; grep -v -i password /tmp/up.log | tail -20 || true; exit 1
 fi
 # `plugin/install` exits non-zero when the plugin is already installed.
 craft plugin/install ckeditor > /dev/null 2>&1 || true

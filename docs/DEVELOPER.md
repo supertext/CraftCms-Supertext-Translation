@@ -191,7 +191,7 @@ The public demo is a container built from `demo/Dockerfile`: PHP 8.3 with Apache
 | Path | Purpose |
 | --- | --- |
 | `Dockerfile` | PHP 8.3 + Apache (document root `demo/project/web`), PHP extensions, Composer install of `demo/project` |
-| `docker/entrypoint.sh` | Every start: database (via `prepare-db.php`), install on the first start, `craft up`, plugins, `supertext-demo/setup`, Apache on `$PORT` |
+| `docker/entrypoint.sh` | Every start: database (via `prepare-db.php`), install on the first start, `craft up` (without a backup: `backupOnUpdate` is off in the demo's `config/general.php`, the image has no `pg_dump`), plugins, `supertext-demo/setup`, Apache on `$PORT` |
 | `docker/prepare-db.php` | Turns `DATABASE_URL` into `CRAFT_DB_*` for the database `CRAFT_DEMO_DB_NAME` (default `craft`) and creates it if missing |
 | `project/` | The Craft project: `composer.json`/`.lock`, `config/` (Pro edition is set by the setup; ASCII slugs), front-end `templates/` with a language switcher, and `modules/supertextdemo` with the `supertext-demo/setup` console command |
 | `.env.example` | The variables below |

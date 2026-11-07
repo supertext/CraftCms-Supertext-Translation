@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Demo: no database backup before updates (the image has no `pg_dump`, so `craft up` failed after a Craft update), and a failing `craft up` no longer prints lines containing the database password to the log.
+
 ### Added
 - **Translation review** on/off per site (*Settings → Plugins → Supertext Translation → Languages*, switch *Translation review*, off by default): translations into a site with it on go through Supertext's review service (Supertext Localization Review), where customers and Supertext linguists correct them on the website with a Chrome extension; corrections come back into Craft with the next translation, and texts translated before keep their (reviewed) wording. Same API key, billing, languages and messages; other sites keep going directly to Supertext. New setting *Review service address* (`reviewUrl`, defaults to Supertext's review service; empty turns review off everywhere; `SUPERTEXT_REVIEW_URL` on the server wins). `config/supertext-translation.php` can set `languages.<handle>.review`. In English, German, French and Italian.
 - Requests to Supertext name the plugin's version in the User-Agent (`CraftCms-Supertext-Translation/<version>`).
