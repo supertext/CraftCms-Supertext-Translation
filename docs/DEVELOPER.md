@@ -250,6 +250,31 @@ BASE_URL=http://127.0.0.1:8090 DEMO_ADMIN_EMAIL=… DEMO_ADMIN_PASSWORD=… \
 
 The script shows the live API address instead of the stand-in's on the settings page, and the public demo's address (`SITE_URL`) instead of the local one under *Sites*.
 
+## Demo movie
+
+`docs/images/demo.gif` (shown at the top of the README) is recorded by `tests/docs/movie.mjs` with Supertext's movie kit (`tests/docs/movie/`: Playwright screencast → ffmpeg; intro and outro cards, captions, cursor; Inter font under the SIL Open Font License in `movie/assets/fonts/`). Like the screenshots, it needs a **fresh** demo (no translations yet) pointed at the stand-in API, `ffmpeg` and, for the voice, Piper:
+
+```bash
+pip install piper-tts                       # the voice; without it (or with MOVIE_VOICE=0) the movie is silent
+cd tests/docs && npm install && npx playwright install chromium
+npm run stand-in &                          # http://127.0.0.1:8765/v1/
+# a fresh demo with SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/, SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report,
+# SUPERTEXT_API_KEY=st-demo-0000-0000-0000 and DEMO_* set, served on :8090
+BASE_URL=http://127.0.0.1:8090 DEMO_EDITOR_EMAIL=… DEMO_EDITOR_PASSWORD=… npm run movie
+```
+
+About 48 seconds, 1280×720, an English voice and English captions: the demo editor opens the sample article in English, keeps *Deutsch* and *Français* in the *Translate with Supertext* box (unticks *Italiano*), clicks *Translate* (the waiting time is cut) and opens the German version. The script skips Craft's autosave and "entry has been updated" checks in the recorded browser, so no draft appears. It writes the GIF (800 px, 12 fps, keep it under 3 MB) to `docs/images/demo.gif` and the MP4 to `tests/docs/movie/out/CraftCms-Supertext-Translation.mp4` (git-ignored; `MOVIE_OUT` changes the path). The MP4 is not committed; the GIF is silent. The voice model (63 MB, pinned revision, checked by SHA-256) is downloaded once into `tests/docs/movie/voice-cache/` (git-ignored, never committed); the time spent generating speech is cut from the movie. Re-record it in the same commit when the Supertext box changes.
+
+**Install and configuration movie** (`tests/docs/movie-install.mjs`, `npm run movie:install`): the same kit, voice and look, for administrators. Same setup as above (a made-up API key: the stand-in accepts any key), but signed in as the demo **administrator**:
+
+```bash
+BASE_URL=http://127.0.0.1:8090 DEMO_ADMIN_EMAIL=… DEMO_ADMIN_PASSWORD=… npm run movie:install
+```
+
+About 91 seconds: a terminal (`kit.terminal()`) with the commands from `docs/INSTALLATION.md` (`composer config repositories.supertext vcs …`, `composer require`, the key in `.env` with the fake key `st-demo-0000-0000-0000`, `php craft plugin/install supertext-translation`; output shortened), where the key comes from (supertext.com → Integrations → API; create an account at supertext.com), then the control panel: *Settings → Plugins → Supertext Translation → Settings*, the **API key** field with the environment variable reference `$SUPERTEXT_API_KEY`, the **Languages** table (*Deutsch*: *German (Switzerland) (de-CH)*, *Translation review* left off), *Save* with the API key check's notice (*the connection to Supertext works*), and the *Translate with Supertext* box on an entry. The settings page shows the live API and the public demo's address instead of the local ones (*Custom API address*, which points the demo at the stand-in, is hidden). No GIF; the MP4 goes to `tests/docs/movie/out/CraftCms-Supertext-Translation-install.mp4` (git-ignored, not committed; `MOVIE_OUT` changes the path). Re-record it when the installation steps, the settings page or the key check change.
+
+Voice: Piper voice “alba” (en_GB), trained on a dataset from the University of Edinburgh's Centre for Speech Technology Research, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
+
 ## Code quality and security checks
 
 - **Checks** (`.github/workflows/checks.yml`): on every push and pull request, [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh) lint the workflows. On pull requests, dependency review fails a PR that adds a package with a known vulnerability (moderate or worse). Third-party actions are pinned to commit SHAs (Dependabot keeps them current); checkouts don't keep credentials, and workflows get `contents: read` unless a job needs more (the release job: `contents: write`).

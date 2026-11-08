@@ -9,3 +9,5 @@ node_modules/
 /demo/project/config/project/
 .env
 /.phpstan-cache/
+/tests/docs/movie/out/
+/tests/docs/movie/voice-cache/

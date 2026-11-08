@@ -2,6 +2,8 @@
 
 Translate Craft CMS entries into your other sites with **Supertext AI**, right on the entry page.
 
+![Demo: an editor opens the English article “Swiss chocolate, shipped worldwide” in Craft CMS, translates it with the Translate with Supertext box into German and French and opens the German version](docs/images/demo.gif)
+
 Open an entry, tick the sites to translate into and click **Translate**: the title, slug, text and rich-text fields and the content of Matrix fields go to Supertext in one request per language and come back as that site's version of the entry, saved as a new revision. Editors review and adjust the translation in Craft as usual.
 
 - Uses Craft's own multi-site: one site per language, only translatable fields are translated
