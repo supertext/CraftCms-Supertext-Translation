@@ -182,7 +182,7 @@ CI (`.github/workflows/ci.yml`) on every push and pull request: **test** (PHP 8.
 
 ## Demo (Railway)
 
-The public demo is a container built from `demo/Dockerfile`: PHP 8.3 with Apache, Craft CMS 5.11 Pro with CKEditor and this plugin, sites English (`en-US`, primary), Deutsch (`de-CH`), Français (`fr-CH`) and Italiano (`it-CH`), and a sample article. It runs on Railway in the `supertext-cms-demos` project, service `CraftCMS`, region EU West (Amsterdam): <https://craftcms-production-4aa0.up.railway.app/> (control panel: `/admin`). Data lives in a `craft` database on the project's PostgreSQL service.
+The public demo is a container built from `demo/Dockerfile`: PHP 8.3 with Apache, Craft CMS 5.12 Pro with CKEditor and this plugin, sites English (`en-US`, primary), Deutsch (`de-CH`), Français (`fr-CH`) and Italiano (`it-CH`), and a sample article. It runs on Railway in the `supertext-cms-demos` project, service `CraftCMS`, region EU West (Amsterdam): <https://craftcms-production-4aa0.up.railway.app/> (control panel: `/admin`). Data lives in a `craft` database on the project's PostgreSQL service.
 
 **Deploys:** Railway builds `main` of this repository (`railway.json` points it at `demo/Dockerfile`). If a push doesn't start a deployment, check that Railway's GitHub app has access to the repository, or redeploy the service (a redeploy also picks up the latest commit).
 

@@ -2,7 +2,7 @@
 #   docker build -f demo/Dockerfile -t supertext-craft-demo .
 FROM mirror.gcr.io/library/php:8.3-apache
 
-ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/2.12.3/install-php-extensions /usr/local/bin/
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/download/2.13.2/install-php-extensions /usr/local/bin/
 RUN install-php-extensions pdo_pgsql intl gd zip bcmath opcache \
  && (a2dismod -f mpm_event mpm_worker >/dev/null 2>&1 || true) \
  && a2enmod mpm_prefork rewrite headers \
