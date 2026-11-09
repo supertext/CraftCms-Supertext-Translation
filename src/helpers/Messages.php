@@ -41,7 +41,7 @@ final class Messages
             'rate_limited' => Craft::t('supertext-translation', 'Too many requests to Supertext. Please try again shortly.'),
             'unavailable' => Craft::t('supertext-translation', 'The Supertext service is currently unavailable.'),
             'http_error' => Craft::t('supertext-translation', 'Supertext answered with HTTP {0}.', $params),
-            'unsupported_language' => Craft::t('supertext-translation', 'The language {0} has no Supertext language yet. Ask your administrator to choose its Supertext language in the plugin settings (Languages).', $params),
+            'unsupported_language' => Craft::t('supertext-translation', 'The language {0} has no Supertext language yet. Ask your administrator to choose it under Settings → Plugins → Supertext Translation → Languages (Supertext language).', $params),
             'unsupported_feature' => Craft::t('supertext-translation', 'Supertext offers no formal or informal tone for this language. Set its form of address to Default in the plugin settings (Languages).'),
             default => null,
         };
@@ -71,6 +71,27 @@ final class Messages
             KeyCheck::MISSING => Craft::t('supertext-translation', 'No API key is set yet. No Supertext account yet? Create one at <a href="{signupUrl}" target="_blank" rel="noopener">supertext.com</a>. Generate your API key at <a href="{apiKeyUrl}" target="_blank" rel="noopener">supertext.com → Integrations → API</a> (requires the Admin role).', $links),
             KeyCheck::UNREACHABLE => Craft::t('supertext-translation', 'The API key couldn\'t be checked because Supertext can\'t be reached. The settings are saved; check again later.'),
             default => Craft::t('supertext-translation', 'The API key couldn\'t be checked: Supertext answered with an error ({status}). The settings are saved; check again later.', $links),
+        };
+    }
+
+    /**
+     * Errors of Export for translation / Import translation: the SDK's TranslationFileError codes
+     * and FileExchange's import errors.
+     *
+     * @param array<string, string> $params `plugin`, `language`
+     */
+    public static function fileError(string $code, array $params = []): string
+    {
+        return match ($code) {
+            'invalid_file' => Craft::t('supertext-translation', 'This file isn’t a valid XLIFF or HTML translation file.'),
+            'missing_metadata' => Craft::t('supertext-translation', 'This file wasn’t exported by the Supertext plugin, or its header was removed.'),
+            'too_large' => Craft::t('supertext-translation', 'The file is too large (at most 10 MB).'),
+            'other_system' => Craft::t('supertext-translation', 'This file belongs to another system ({plugin}).', $params),
+            'not_found' => Craft::t('supertext-translation', 'The entry this file was exported from no longer exists.'),
+            'no_language' => Craft::t('supertext-translation', 'The site has no language {language}.', $params),
+            'forbidden' => Craft::t('supertext-translation', 'You are not allowed to edit the entry in this site.'),
+            'already_translated' => Craft::t('supertext-translation', 'This site already has its own text. Tick “Overwrite existing translations” to replace it.'),
+            default => Craft::t('supertext-translation', 'Nothing to translate.'),
         };
     }
 

@@ -33,6 +33,16 @@ final class SupertextClient
     public const STAGING = 'https://api.staging.supertext.com/v1/';
     public const TESTING = 'https://api.testing.supertext.com/v1/';
 
+    /**
+     * Supertext's review service (translation proxy of Supertext Localization Review). It speaks the
+     * same API and forwards to the live Supertext API, keeping every translation so reviewers can
+     * correct them on the website. Used for sites with *Translation review* on.
+     */
+    public const REVIEW_URL = 'https://localizationreview-production.up.railway.app/v1/';
+
+    /** Name in the User-Agent (with the plugin's version), same as in the version reports. */
+    public const USER_AGENT = 'CraftCms-Supertext-Translation';
+
     /** Stay well below the API's 1,000,000 character limit per document. */
     public const MAX_DOCUMENT_CHARACTERS = Protocol::DEFAULT_MAX_CHARACTERS;
 
@@ -53,16 +63,22 @@ final class SupertextClient
         SdkException::FILE_DELETED => ['deleted', 'The document was deleted at Supertext before it could be downloaded.'],
         SdkException::TIMEOUT => ['timeout', 'Timed out waiting for the Supertext translation.'],
         SdkException::INCOMPLETE_RESPONSE => ['empty', 'The translated document was empty.'],
-        SdkException::UNSUPPORTED_LANGUAGE => ['unsupported_language', 'The language %s has no Supertext language yet. Ask your administrator to choose its Supertext language in the plugin settings (Languages).'],
+        SdkException::UNSUPPORTED_LANGUAGE => ['unsupported_language', 'The language %s has no Supertext language yet. Ask your administrator to choose it under Settings → Plugins → Supertext Translation → Languages (Supertext language).'],
         SdkException::UNSUPPORTED_FEATURE => ['unsupported_feature', 'Supertext offers no formal or informal tone for this language. Set its form of address to Default in the plugin settings (Languages).'],
     ];
 
     private readonly Client $sdk;
     private readonly string $apiKey;
 
+    /** @var (\Closure(): self)|null builds the client for the review service (null: none) */
+    private readonly ?\Closure $makeReviewClient;
+    private ?self $reviewClient = null;
+
     /**
      * @param callable(string $method, string $url, array<string, string> $headers, ?string $body): array{status: int, body: string, headers: array<string, string>} $transport
      * @param callable(float $seconds): void|null $sleep tests: the SDK's clock then counts the slept time
+     * @param string $reviewUrl     review service for sites with *Translation review* on ('' = none)
+     * @param string $pluginVersion the plugin's version for the User-Agent ('' = name only)
      */
     public function __construct(
         string $apiKey,
@@ -71,8 +87,15 @@ final class SupertextClient
         private readonly int $pollTimeout = 180,
         float $pollInterval = 2.0,
         ?callable $sleep = null,
+        string $reviewUrl = '',
+        string $pluginVersion = '',
     ) {
         $this->apiKey = self::normalizeKey($apiKey);
+        $baseUrl = $baseUrl !== '' ? $baseUrl : self::LIVE;
+        $reviewUrl = trim($reviewUrl);
+        $this->makeReviewClient = $reviewUrl === '' || rtrim($reviewUrl, '/') === rtrim($baseUrl, '/')
+            ? null
+            : static fn (): self => new self($apiKey, $reviewUrl, $transport, $pollTimeout, $pollInterval, $sleep, '', $pluginVersion);
 
         $elapsed = 0.0;
         $sdkSleep = $sleep === null ? null : static function (float $seconds) use ($sleep, &$elapsed): void {
@@ -85,11 +108,12 @@ final class SupertextClient
 
         $this->sdk = new Client(
             $this->apiKey,
-            baseUrl: $baseUrl !== '' ? $baseUrl : self::LIVE,
+            baseUrl: $baseUrl,
             pollInterval: $pollInterval,
             timeout: (float) $pollTimeout,
             requestTimeout: 60.0,
-            userAgent: 'CraftCms-Supertext-Translation',
+            // The plugin's version too, so Supertext and the review service see which release calls.
+            userAgent: self::USER_AGENT . ($pluginVersion !== '' ? '/' . $pluginVersion : ''),
             transport: new CallableTransport($transport),
             sleep: $sdkSleep,
             clock: $clock,
@@ -113,6 +137,29 @@ final class SupertextClient
             'testing' => self::TESTING,
             default   => self::LIVE,
         };
+    }
+
+    /**
+     * The review service address: `SUPERTEXT_REVIEW_URL` on the server wins (also when empty), else
+     * the setting. '' = review off for every site.
+     */
+    public static function reviewUrlFor(?string $environmentValue, string $setting): string
+    {
+        return trim($environmentValue ?? $setting);
+    }
+
+    /**
+     * The client to use for a target site: the review service when its *Translation review* is on
+     * (same key, timeouts, transport and User-Agent; created once), else this one. Without a review
+     * URL, always this one. A document is collected by the client that submitted it.
+     */
+    public function forReview(bool $review): self
+    {
+        if (!$review || $this->makeReviewClient === null) {
+            return $this;
+        }
+
+        return $this->reviewClient ??= ($this->makeReviewClient)();
     }
 
     public function hasApiKey(): bool

@@ -240,4 +240,74 @@ final class SupertextClientTest extends TestCase
         self::assertSame(SupertextClient::STAGING, SupertextClient::baseUrlFor('staging'));
         self::assertSame('http://127.0.0.1:8765/v1/', SupertextClient::baseUrlFor('live', 'http://127.0.0.1:8765/v1/'));
     }
+
+    /** @return callable(string, string, array<string, string>, ?string): array{status: int, body: string, headers: array<string, string>} */
+    private function recordingTransport(): callable
+    {
+        return function (string $method, string $url, array $headers, ?string $body): array {
+            $this->calls[] = compact('method', 'url', 'headers', 'body');
+
+            return match (true) {
+                $method === 'POST'                  => ['status' => 200, 'body' => '{"file_id":"f1"}', 'headers' => []],
+                str_ends_with($url, '/status')      => ['status' => 200, 'body' => '{"status":"done"}', 'headers' => []],
+                str_ends_with($url, '/translation') => ['status' => 200, 'body' => '<div data-st-id="0">Hallo</div>', 'headers' => []],
+                default                             => ['status' => 200, 'body' => '{}', 'headers' => []],
+            };
+        };
+    }
+
+    public function testTranslationReviewGoesThroughTheReviewService(): void
+    {
+        $client = new SupertextClient('test-key', 'https://api.test/v1/', $this->recordingTransport(), 10, 0.01, static function (): void {
+        }, 'https://review.test/v1/', '1.2.3');
+
+        self::assertSame($client, $client->forReview(false), 'review off: the direct client');
+        $review = $client->forReview(true);
+        self::assertNotSame($client, $review);
+        self::assertSame($review, $client->forReview(true), 'one review client');
+
+        // A site with review on: upload, status, download and delete all through the review service.
+        self::assertStringContainsString('Hallo', $review->translateDocument('<div data-st-id="0">Hello</div>', 'de-CH', 'en'));
+        self::assertSame(
+            ['POST review.test', 'GET review.test', 'GET review.test', 'DELETE review.test'],
+            array_map(static fn (array $c): string => $c['method'] . ' ' . parse_url($c['url'], \PHP_URL_HOST), $this->calls)
+        );
+        self::assertSame('Supertext-Auth-Key test-key', $this->calls[0]['headers']['Authorization'], 'same key');
+        self::assertStringContainsString('CraftCms-Supertext-Translation/1.2.3', $this->calls[0]['headers']['User-Agent'], 'User-Agent with the version');
+
+        // Another site: directly to Supertext.
+        $this->calls = [];
+        $client->forReview(false)->translateDocument('<div data-st-id="0">Hello</div>', 'fr-CH', 'en');
+        self::assertSame(
+            ['POST api.test', 'GET api.test', 'GET api.test', 'DELETE api.test'],
+            array_map(static fn (array $c): string => $c['method'] . ' ' . parse_url($c['url'], \PHP_URL_HOST), $this->calls)
+        );
+        self::assertStringContainsString('CraftCms-Supertext-Translation/1.2.3', $this->calls[0]['headers']['User-Agent']);
+
+        // The key check never uses the review service.
+        $this->calls = [];
+        $client->validateApiKey();
+        self::assertSame('https://api.test/v1/features', $this->calls[0]['url']);
+    }
+
+    public function testTranslationReviewOffWithoutReviewUrl(): void
+    {
+        $client = new SupertextClient('test-key', 'https://api.test/v1/', $this->recordingTransport());
+        self::assertSame($client, $client->forReview(true), 'empty review URL: review off');
+
+        $same = new SupertextClient('test-key', 'https://api.test/v1', $this->recordingTransport(), reviewUrl: 'https://api.test/v1/');
+        self::assertSame($same, $same->forReview(true), 'review URL = API URL: no second client');
+    }
+
+    public function testReviewUrlDefaultsToSupertextsReviewService(): void
+    {
+        self::assertSame('https://localizationreview-production.up.railway.app/v1/', SupertextClient::REVIEW_URL);
+        $settings = new \ReflectionClass(\supertext\crafttranslation\models\Settings::class);
+        self::assertSame(SupertextClient::REVIEW_URL, $settings->getProperty('reviewUrl')->getDefaultValue(), 'the setting\'s default');
+
+        self::assertSame(SupertextClient::REVIEW_URL, SupertextClient::reviewUrlFor(null, SupertextClient::REVIEW_URL), 'no SUPERTEXT_REVIEW_URL: the setting');
+        self::assertSame('', SupertextClient::reviewUrlFor(null, ' '), 'setting empty: off');
+        self::assertSame('http://localhost:3000/v1/', SupertextClient::reviewUrlFor(' http://localhost:3000/v1/ ', SupertextClient::REVIEW_URL), 'SUPERTEXT_REVIEW_URL wins');
+        self::assertSame('', SupertextClient::reviewUrlFor('', SupertextClient::REVIEW_URL), 'SUPERTEXT_REVIEW_URL empty: off');
+    }
 }

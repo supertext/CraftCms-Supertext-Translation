@@ -35,6 +35,17 @@
     placeholder: 'https://api.supertext.com/v1/',
 }) }}
 
+{{ forms.autosuggestField({
+    label: 'Review service address'|t('supertext-translation'),
+    instructions: 'Address of Supertext’s review service, used for sites with Translation review on (see Languages below). Leave it empty to turn Translation review off for every site. Only change it when Supertext gives you another address.'|t('supertext-translation'),
+    id: 'reviewUrl',
+    name: 'reviewUrl',
+    value: settings.reviewUrl,
+    suggestEnvVars: true,
+    placeholder: reviewDefault,
+    warning: reviewForced ? 'SUPERTEXT_REVIEW_URL is set on this server and is used instead of this setting.'|t('supertext-translation') : null,
+}) }}
+
 <div class="field" data-supertext-test>
     <div class="heading"><label>{{ 'API key check'|t('supertext-translation') }}</label></div>
     <div class="instructions"><p>{{ 'Checks the saved API key against the Supertext API. Nothing is translated or charged.'|t('supertext-translation') }}</p></div>
@@ -55,7 +66,14 @@
 <hr>
 
 <h2>{{ 'Languages'|t('supertext-translation') }}</h2>
-<p>{{ 'Each site is translated into its Supertext language. Sites whose language is a Supertext language are pre-filled; choose one for every other site. Supertext doesn’t guess a region: a site in “de” needs German (Germany), German (Switzerland) or German (Austria).'|t('supertext-translation') }}</p>
+<p>{{ 'Choose the Supertext language of each site: Supertext translates into it, and from it when the site is the source. The list preselects the site’s language where Supertext offers it, else its usual variant (e.g. “de” → German (Germany) de-DE, “en” → English (United States) en-US); save to keep the choice. A site marked “— choose —” has no obvious Supertext language and isn’t translated until you choose one.'|t('supertext-translation') }}</p>
+<p>{{ 'Translation review: translations into a site with it on go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the entry is translated.'|t('supertext-translation') }}</p>
+{% if not reviewAvailable %}
+    <p class="warning">{{ 'The review service address is empty: Translation review is off for every site.'|t('supertext-translation') }}</p>
+{% endif %}
+{% if settings.getErrors('languages') %}
+    {% include '_includes/forms/errorList' with { errors: settings.getErrors('languages') } %}
+{% endif %}
 <table class="data fullwidth" data-supertext-languages>
     <thead>
         <tr>
@@ -63,48 +81,65 @@
             <th>{{ 'Language'|t('app') }}</th>
             <th>{{ 'Supertext language'|t('supertext-translation') }}</th>
             <th>{{ 'Form of address'|t('supertext-translation') }}</th>
+            <th>{{ 'Translation review'|t('supertext-translation') }}</th>
         </tr>
     </thead>
     <tbody>
         {% for site in sites %}
             {% set config = settings.languages[site.handle] ?? {} %}
             {% set info = languages[site.handle] %}
-            {% set options = [{ value: '', label: '—' }] %}
+            {% set options = [{ value: '', label: '— choose —'|t('supertext-translation') }] %}
             {% set known = info.code == '' %}
             {% for target in targets %}
-                {% set options = options|merge([{ value: target.code, label: target.name ~ ' (' ~ target.code ~ ')' }]) %}
+                {% set options = options|merge([{ value: target.code, label: target.name ~ ' (' ~ target.code ~ ')', data: { politeness: target.politeness ? '1' : '0' } }]) %}
                 {% if target.code == info.code %}{% set known = true %}{% endif %}
             {% endfor %}
             {% if not known %}
-                {# A code the SDK's list doesn't know (e.g. one Supertext added later): kept, sent as it is. #}
+                {# Only a code set in config/supertext-translation.php can be outside the list: shown as it is. #}
                 {% set options = options|merge([{ value: info.code, label: info.code }]) %}
             {% endif %}
-            <tr>
+            {% set showPoliteness = info.politenessSupported is not same as(false) and info.target is not null %}
+            <tr data-supertext-site="{{ site.handle }}">
                 <td>{{ site.name }}</td>
                 <td><code>{{ site.language }}</code></td>
                 <td>
-                    {{ forms.select({
+                    {{ forms.selectField({
+                        id: 'supertext-language-' ~ site.handle,
                         name: 'languages[' ~ site.handle ~ '][code]',
                         value: info.code,
                         options: options,
+                        disabled: info.configured,
+                        inputAttributes: { aria: { label: 'Supertext language'|t('supertext-translation') ~ ': ' ~ site.name }, data: { 'supertext-code': true } },
+                        tip: info.configured ? 'Set in config/supertext-translation.php, which overrides this setting.'|t('supertext-translation') : null,
                     }) }}
                     {% if info.target is null %}
                         <p class="error" data-supertext-not-mapped>{{ 'Not mapped: choose a Supertext language, or this site isn’t translated.'|t('supertext-translation') }}</p>
                     {% endif %}
                 </td>
                 <td>
-                    {{ forms.select({
-                        name: 'languages[' ~ site.handle ~ '][politeness]',
-                        value: config.politeness ?? 'default',
-                        options: [
-                            { value: 'default', label: 'Default'|t('supertext-translation') },
-                            { value: 'more', label: 'Formal (Sie, vous)'|t('supertext-translation') },
-                            { value: 'less', label: 'Informal (du, tu)'|t('supertext-translation') },
-                        ],
+                    <div data-supertext-politeness{% if not showPoliteness %} class="hidden"{% endif %}>
+                        {{ forms.select({
+                            name: 'languages[' ~ site.handle ~ '][politeness]',
+                            value: config.politeness ?? 'default',
+                            disabled: not showPoliteness,
+                            inputAttributes: { aria: { label: 'Form of address'|t('supertext-translation') ~ ': ' ~ site.name } },
+                            options: [
+                                { value: 'default', label: 'Default'|t('supertext-translation') },
+                                { value: 'more', label: 'Formal (Sie, vous)'|t('supertext-translation') },
+                                { value: 'less', label: 'Informal (du, tu)'|t('supertext-translation') },
+                            ],
+                        }) }}
+                    </div>
+                    <p class="light" data-supertext-no-politeness{% if showPoliteness or info.target is null %} hidden{% endif %}>{{ 'Not offered for this language.'|t('supertext-translation') }}</p>
+                </td>
+                <td>
+                    {{ forms.lightswitch({
+                        name: 'languages[' ~ site.handle ~ '][review]',
+                        on: info.review,
+                        value: '1',
+                        disabled: info.reviewConfigured,
+                        containerAttributes: { aria: { label: 'Translation review'|t('supertext-translation') ~ ': ' ~ site.name } },
                     }) }}
-                    {% if (config.politeness ?? 'default') != 'default' and info.politenessSupported is same as(false) %}
-                        <p class="warning">{{ 'Supertext offers no formal/informal choice for this language: set it to Default.'|t('supertext-translation') }}</p>
-                    {% endif %}
                 </td>
             </tr>
         {% endfor %}
@@ -139,6 +174,27 @@
 
 {% js %}
 (function () {
+    // Form of address only where the chosen Supertext language offers it.
+    document.querySelectorAll('[data-supertext-site]').forEach((row) => {
+        const code = row.querySelector('[data-supertext-code]');
+        const box = row.querySelector('[data-supertext-politeness]');
+        const none = row.querySelector('[data-supertext-no-politeness]');
+        const notMapped = row.querySelector('[data-supertext-not-mapped]');
+        if (!code || !box || !none) {
+            return;
+        }
+        code.addEventListener('change', () => {
+            const option = code.options[code.selectedIndex];
+            const offered = code.value !== '' && option?.dataset.politeness !== '0';
+            box.classList.toggle('hidden', !offered);
+            box.querySelector('select').disabled = !offered;
+            none.hidden = offered || code.value === '';
+            if (notMapped) {
+                notMapped.hidden = code.value !== '';
+            }
+        });
+    });
+
     const button = document.querySelector('[data-supertext-test-button]');
     const result = document.querySelector('[data-supertext-test-result]');
     button.addEventListener('click', async () => {

@@ -20,6 +20,7 @@ use craft\events\RegisterUserPermissionsEvent;
 use craft\services\UserPermissions;
 use supertext\crafttranslation\api\Languages;
 use supertext\crafttranslation\api\Reporting as ApiReporting;
+use supertext\crafttranslation\api\SupertextClient;
 use supertext\crafttranslation\elements\actions\TranslateWithSupertext;
 use supertext\crafttranslation\helpers\Messages;
 use supertext\crafttranslation\models\Settings;
@@ -46,7 +47,7 @@ class Plugin extends BasePlugin
 {
     public const PERMISSION = 'supertext-translation:translate';
 
-    public string $schemaVersion = '1.1.0';
+    public string $schemaVersion = '1.2.0';
     public bool $hasCpSettings = true;
 
     public static function config(): array
@@ -138,10 +139,15 @@ class Plugin extends BasePlugin
         $languages = [];
         foreach (Craft::$app->getSites()->getAllSites() as $site) {
             $target = $settings->targetCodeOrNull($site->handle, $site->language);
+            $configured = Settings::configuredLanguageCode($site->handle);
             $languages[$site->handle] = [
-                'code' => $settings->languageCode($site->handle) ?: (string) Languages::match($site->language),
+                // The select shows the saved choice, else the suggestion (exact match or the SDK's default), else "— choose —".
+                'code' => $settings->languageCode($site->handle) ?: (string) Languages::suggest($site->language),
+                'configured' => $configured !== '',
                 'target' => $target,
                 'politenessSupported' => $target !== null ? Languages::supportsPoliteness($target) : null,
+                'review' => $settings->review($site->handle),
+                'reviewConfigured' => Settings::configuredReview($site->handle) !== null,
             ];
         }
         $check = $reporting->lastCheck();
@@ -150,7 +156,10 @@ class Plugin extends BasePlugin
             'settings' => $settings,
             'sites' => Craft::$app->getSites()->getAllSites(),
             'languages' => $languages,
-            'targets' => Languages::targets(),
+            'targets' => Languages::options(Craft::$app->language),
+            'reviewAvailable' => $settings->getReviewUrl() !== '',
+            'reviewDefault' => SupertextClient::REVIEW_URL,
+            'reviewForced' => Settings::reviewUrlFromEnvironment() !== null,
             'check' => $check,
             'checkText' => $check !== null ? Messages::keyCheck($check) : null,
             'reportsEnabled' => $reporting->enabled(),

@@ -27,12 +27,14 @@ mkdir -p "$DEST"
 cp -R "$SRC/sdk/php/src" "$DEST/src"
 cp "$SRC/LICENSE" "$DEST/LICENSE"
 find "$DEST/src" -name '*.php' -exec sed -i 's/Supertext\\Sdk\\/supertext\\crafttranslation\\sdk\\/g; s/Supertext\\Sdk;/supertext\\crafttranslation\\sdk;/g' {} +
+VERSION="$(sed -n "s/.*SDK_VERSION = '\([^']*\)'.*/\1/p" "$DEST/src/Supertext.php")"
 printf '%s\n' "$COMMIT" > "$DEST/COMMIT"
+printf '%s\n' "$VERSION" > "$DEST/VERSION"
 cat > "$DEST/README.md" <<EOF
 # Supertext SDK (bundled copy)
 
 PHP part of the [Supertext SDK](https://github.com/Supertext/Supertext-API-SDK-and-Guide),
-commit \`$COMMIT\`, namespace \`supertext\\crafttranslation\\sdk\` instead of \`Supertext\\Sdk\`.
+version $VERSION, commit \`$COMMIT\`, namespace \`supertext\\crafttranslation\\sdk\` instead of \`Supertext\\Sdk\`.
 
 Don't edit these files: fix the SDK in its own repository, then run \`scripts/vendor-sdk.sh\`.
 EOF
@@ -40,4 +42,4 @@ if grep -rq 'Supertext\\Sdk' "$DEST/src"; then
     echo "vendor-sdk: unprefixed Supertext\\Sdk reference left in $DEST/src" >&2
     exit 1
 fi
-echo "lib/supertext-sdk: Supertext SDK (PHP) from commit $COMMIT"
+echo "lib/supertext-sdk: Supertext SDK (PHP) $VERSION from commit $COMMIT"

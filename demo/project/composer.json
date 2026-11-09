@@ -5,7 +5,7 @@
   "license": "MIT",
   "require": {
     "craftcms/ckeditor": "^5.8",
-    "craftcms/cms": "~5.11.4",
+    "craftcms/cms": "~5.12.0",
     "supertext/craft-supertext-translation": "*@dev",
     "vlucas/phpdotenv": "^5.4.0"
   },
@@ -16,7 +16,7 @@
     "psr-4": { "modules\\": "modules/" }
   },
   "config": {
-    "allow-plugins": { "craftcms/plugin-installer": true, "yiisoft/yii2-composer": true },
+    "allow-plugins": { "craftcms/plugin-installer": true, "php-http/discovery": false, "yiisoft/yii2-composer": true },
     "sort-packages": true,
     "optimize-autoloader": true,
     "platform": { "php": "8.3" }

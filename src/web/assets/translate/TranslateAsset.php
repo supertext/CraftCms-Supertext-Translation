@@ -31,6 +31,20 @@ class TranslateAsset extends AssetBundle
         'Supertext is not set up yet: an administrator needs to add the API key in the plugin settings.',
         'This entry exists in no other site you can edit.',
         'Choose at least one site.',
+        'Export for translation',
+        'Import translation',
+        'File format',
+        'XLIFF 1.2 (for translation tools)',
+        'HTML (one language per file)',
+        'Download file',
+        'Translated file (XLIFF or HTML)',
+        'Also import texts whose source changed since the export',
+        'Imported: {count}',
+        'Skipped, source changed since the export: {count}',
+        'Not translated in the file: {count}',
+        'Formatting changed, not imported: {count}',
+        'Not in the file: {count}',
+        'Please choose a file.',
     ];
 
     public function init(): void

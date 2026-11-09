@@ -19,6 +19,7 @@ use craft\fields\PlainText;
 use craft\helpers\Db;
 use craft\helpers\ElementHelper;
 use craft\models\Site;
+use supertext\crafttranslation\api\FileExchange;
 use supertext\crafttranslation\api\SupertextClient;
 use supertext\crafttranslation\api\SupertextException;
 use supertext\crafttranslation\helpers\Messages;
@@ -130,8 +131,9 @@ class Translator extends Component
                     continue;
                 }
 
+                // Sites with *Translation review* on go through the review service (same key and protocol).
                 $translated = $this->translateUnits(
-                    $client,
+                    $client->forReview($settings->review($site->handle)),
                     $units,
                     $sourceSite ? $settings->sourceCode($sourceSite->handle, $sourceSite->language) : '',
                     $settings->targetCode($site->handle, $site->language),
@@ -160,6 +162,139 @@ class Translator extends Component
         return $results;
     }
 
+    /**
+     * Export for translation: the entry's texts in its current site as an XLIFF or HTML file for
+     * the given target sites (see FileExchange), or null when there is nothing to translate.
+     *
+     * @param list<int> $targetSiteIds
+     * @return array{content: string, filename: string, contentType: string}|null
+     */
+    public function exportFile(int $entryId, int $sourceSiteId, array $targetSiteIds, string $format): ?array
+    {
+        $source = $this->entryInSite($entryId, $sourceSiteId);
+        $sourceSite = Craft::$app->getSites()->getSiteById($sourceSiteId);
+        if (!$source || !$sourceSite) {
+            throw new SupertextException(Craft::t('supertext-translation', 'The entry was not found.'));
+        }
+
+        $settings = Plugin::getInstance()->getSettings();
+        $supported = array_map(static fn(Site $site) => $site->id, $this->supportedSites($source));
+        $targets = [];
+        foreach (array_unique(array_map('intval', $targetSiteIds)) as $siteId) {
+            $site = Craft::$app->getSites()->getSiteById($siteId);
+            if ($site && $siteId !== $sourceSiteId && \in_array($siteId, $supported, true)) {
+                $targets[] = [
+                    'siteId' => $site->id,
+                    'handle' => $site->handle,
+                    'language' => $settings->targetCodeOrNull($site->handle, $site->language) ?? FileExchange::fallbackCode($site->language),
+                ];
+            }
+        }
+        if ($targets === []) {
+            throw new SupertextException(Craft::t('supertext-translation', 'Choose at least one site.'));
+        }
+
+        // A language without a Supertext code doesn't block an export: the file may go to any translator.
+        try {
+            $sourceLanguage = $settings->sourceCode($sourceSite->handle, $sourceSite->language);
+        } catch (SupertextException) {
+            $sourceLanguage = FileExchange::fallbackCode($sourceSite->language);
+        }
+
+        return FileExchange::export($entryId, $sourceSiteId, $sourceLanguage, $targets, $this->fileSegments($this->collectUnits($source)), $format);
+    }
+
+    /**
+     * Import translation: writes each job of an uploaded file into its entry and target site, through
+     * the same write-back as API translations (revision, nested entries, overwrite rule).
+     *
+     * @return list<array{entryId: ?int, siteId: ?int, title: string, site: string, language: string, error: ?string, params: array<string, string>, counts: array<string, int>, imported: int, message?: string}>
+     * @throws \supertext\crafttranslation\sdk\Files\TranslationFileError invalid_file, missing_metadata, too_large
+     */
+    public function importFile(string $content, bool $includeChanged, bool $overwrite, ?User $user = null): array
+    {
+        $results = [];
+        foreach (FileExchange::read($content) as $file) {
+            $open = function (int $entryId, int $sourceSiteId, int $targetSiteId) use ($overwrite, $user): array {
+                $source = $this->entryInSite($entryId, $sourceSiteId);
+                if (!$source) {
+                    return ['error' => FileExchange::NOT_FOUND];
+                }
+                $site = Craft::$app->getSites()->getSiteById($targetSiteId);
+                $target = $site ? $this->entryInSite($entryId, $targetSiteId) : null;
+                $info = ['title' => (string) $source->title, 'site' => $site?->getName() ?? ''];
+                if (!$site || !$target) {
+                    return $info + ['error' => FileExchange::NO_LANGUAGE];
+                }
+                if ($user && (!$user->can(Plugin::PERMISSION) || !Craft::$app->getElements()->canSave($target, $user))) {
+                    return $info + ['error' => FileExchange::FORBIDDEN];
+                }
+                $units = $this->collectUnits($source);
+                if (!$overwrite && $this->differs($units, $target)) {
+                    return $info + ['error' => FileExchange::ALREADY_TRANSLATED];
+                }
+
+                return $info + [
+                    'segments' => $this->fileSegments($units),
+                    'write' => function (array $texts) use ($units, $entryId, $sourceSiteId, $targetSiteId, $user): void {
+                        $translations = [];
+                        foreach ($units as $i => $unit) {
+                            if (isset($texts[self::unitKey($unit)])) {
+                                $translations[$i] = $texts[self::unitKey($unit)];
+                            }
+                        }
+                        $sourceSite = Craft::$app->getSites()->getSiteById($sourceSiteId);
+                        $this->apply($units, $translations, $targetSiteId, $sourceSite?->getName() ?? '', $user);
+                        $this->remember($entryId, $sourceSiteId, $targetSiteId, $user);
+                    },
+                ];
+            };
+
+            try {
+                $result = FileExchange::import($file, $includeChanged, $open);
+            } catch (\Throwable $e) {
+                if (!$e instanceof SupertextException) {
+                    Craft::error($e, __METHOD__);
+                }
+                $result = ['entryId' => null, 'siteId' => null, 'title' => $file->reference, 'site' => $file->targetLanguage, 'language' => $file->targetLanguage, 'error' => 'save_failed', 'params' => [], 'counts' => [], 'imported' => 0];
+                $result['message'] = Messages::of($e);
+            }
+            if ($result['error'] !== null) {
+                $result['message'] ??= Messages::fileError($result['error'], $result['params'] + ['language' => $result['language']]);
+            }
+            $results[] = $result;
+        }
+
+        return $results;
+    }
+
+    /**
+     * The units as segments of a translation file, keyed `<element id>.<title|slug|field handle>`
+     * (slugs as words, like the API translation sends them).
+     *
+     * @param list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}> $units
+     * @return list<array{key: string, text: string, html: bool}>
+     */
+    public function fileSegments(array $units): array
+    {
+        $segments = [];
+        foreach ($units as $unit) {
+            $segments[] = [
+                'key' => self::unitKey($unit),
+                'text' => $unit['kind'] === 'slug' ? str_replace('-', ' ', $unit['value']) : $unit['value'],
+                'html' => $unit['kind'] === 'html',
+            ];
+        }
+
+        return $segments;
+    }
+
+    /** @param array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string} $unit */
+    private static function unitKey(array $unit): string
+    {
+        return $unit['element']->id . '.' . ($unit['attribute'] ?? $unit['field']);
+    }
+
     public function client(): SupertextClient
     {
         $settings = Plugin::getInstance()->getSettings();
@@ -172,6 +307,8 @@ class Translator extends Component
             $settings->getBaseUrl(),
             $this->transport ?? self::guzzleTransport(),
             $settings->timeout,
+            reviewUrl: $settings->getReviewUrl(),
+            pluginVersion: Plugin::getInstance()->getVersion(),
         );
     }
 
