@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 1.0.0 — 2026-11-09
+
+First stable release. Every plugin release is now tested end to end against the live Supertext API (`.github/workflows/e2e.yml`).
+
 ### Fixed
 
 - Demo: no database backup before updates (the image has no `pg_dump`, so `craft up` failed after a Craft update), and a failing `craft up` no longer prints lines containing the database password to the log.
