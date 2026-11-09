@@ -285,6 +285,14 @@ Voice: Piper voice “alba” (en_GB), trained on a dataset from the University 
 
 Before starting work in this repo, look at its open findings: code scanning alerts, secret scanning alerts, Dependabot PRs and the "Broken links in the docs" issue.
 
+## Dependency updates
+
+Dependabot opens weekly pull requests (minor and patch updates grouped). Major updates the plugin can't take are ignored in `.github/dependabot.yml`:
+
+- `phpunit/phpunit` >=12: PHPUnit 12 and later need PHP 8.3+; the plugin supports PHP 8.2 (CI tests 8.2).
+
+Remove a rule when the plugin's minimum version (PHP, CMS) moves up far enough.
+
 ## Releasing
 
 Releases are published by `.github/workflows/release.yml` when the version is officially bumped; nobody tags or creates releases by hand.
