@@ -275,6 +275,25 @@ About 91 seconds: a terminal (`kit.terminal()`) with the commands from `docs/INS
 
 Voice: Piper voice “alba” (en_GB), trained on a dataset from the University of Edinburgh's Centre for Speech Technology Research, CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/)
 
+## End-to-end tests
+
+The unit tests and `tests/demo-check.sh` use fakes and the stand-in. `.github/workflows/e2e.yml` also tests against the **real Supertext API**, so changes on Supertext's side (language codes, regional variants, formatting, rate limits) show up. It runs on every push to `main` that touches the plugin (`src/`, `lib/`, `composer.json`), the demo or the tests, on pull requests that change the E2E test or workflow, every Monday at 05:12 UTC, and by hand (*Actions → E2E → Run workflow*). It builds the demo image once (Docker layer cache in GitHub Actions) and starts it twice on one PostgreSQL service, each with its own new database (`CRAFT_DEMO_DB_NAME`) and demo accounts made up for the run:
+
+1. **Real API** (repository or organization secret `SUPERTEXT_API_KEY`; without it these steps are skipped with a warning). Version reports are off (`SUPERTEXT_VERSION_REPORTS=0`), so CI runs don't appear in the Commando Center.
+   - `tests/e2e/features.mjs` asks the live `GET features` (cost-free, no plugin or SDK code) whether every pair the demo translates (`en` → `de-CH`, `fr-CH`, `it-CH`) is offered; a missing pair fails the run. Whether the plugin's own language list matches the API is the SDK's job (its own tests).
+   - `tests/e2e/live.mjs` (Playwright): the editor (`DEMO_EDITOR_*`) opens the sample article in the English site and translates it into every other site with the Supertext box on the edit page. Then the database (`elements_sites`) is checked for the article and its nested *Highlight* entries in every site: each has a row, its enabled state is unchanged (the plugin doesn't publish or unpublish), every field that has text in English (title, the article's slug, *Summary*, *Body*, the highlights' *Text*) is filled and at least 80 % of them changed (a single word can stay the same), no `data-st-id`/placeholder is left, links (with their targets), bold, italics, headings, list items and Craft reference tags are kept in the same number, the text is in the target language (common words of each language counted) and de-CH has no "ß". The translated front-end page answers at its translated slug. Translating again with *Overwrite existing translations* (the warning must appear) must update the same rows: no new entries, no new `elements_sites` rows. The Supertext box and its results must show no error. Each run translates the sample article twice into three languages (about 3,000 characters on the key's account).
+2. **Stand-in API**: the docs screenshots (see *Docs screenshots*), so the images don't change with each machine translation. If `docs/images/` changed, a second job pushes the branch `automation/docs-screenshots` and opens (or updates) the pull request "Docs: regenerate screenshots" (only for runs on `main`). This needs *Settings → Actions → General → Allow GitHub Actions to create and approve pull requests*.
+
+If a run fails, the artifact `e2e-debug` has the result pages (`artifacts/*.png`), the demo containers' logs and the stand-in log. Locally:
+
+cd tests/e2e && npm install && npx playwright install chromium
+# a fresh demo (new database) with a real SUPERTEXT_API_KEY, e.g. on port 8081
+SUPERTEXT_API_KEY=… E2E_TARGETS=de-CH,fr-CH,it-CH node features.mjs
+CRAFT_URL=http://127.0.0.1:8081 DATABASE_URL=postgresql://user:pass@127.0.0.1:5432/craft \
+  EDITOR_EMAIL=… EDITOR_PASSWORD=… npm run live
+
+`live.mjs` also passes against the stand-in API (the stand-in returns real translations for the sample article), which is how to try changes to it without a key.
+
 ## Code quality and security checks
 
 - **Checks** (`.github/workflows/checks.yml`): on every push and pull request, [actionlint](https://github.com/rhysd/actionlint) and [zizmor](https://docs.zizmor.sh) lint the workflows. On pull requests, dependency review fails a PR that adds a package with a known vulnerability (moderate or worse). Third-party actions are pinned to commit SHAs (Dependabot keeps them current); checkouts don't keep credentials, and workflows get `contents: read` unless a job needs more (the release job: `contents: write`).

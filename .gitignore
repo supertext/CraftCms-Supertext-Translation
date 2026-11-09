@@ -11,3 +11,6 @@ node_modules/
 /.phpstan-cache/
 /tests/docs/movie/out/
 /tests/docs/movie/voice-cache/
+/tests/e2e/node_modules/
+/tests/e2e/artifacts/
+/tests/docs/stand-in.log
