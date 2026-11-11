@@ -1,0 +1,2 @@
+# Local addresses in command examples (demo and stand-in on the developer machine).
+^https?://(127\.0\.0\.1|localhost)([:/]|$)
