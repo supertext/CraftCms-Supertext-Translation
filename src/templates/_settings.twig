@@ -37,7 +37,7 @@
 
 {{ forms.autosuggestField({
     label: 'Review service address'|t('supertext-translation'),
-    instructions: 'Address of Supertext’s review service, used for sites with Translation review on (see Languages below). Leave it empty to turn Translation review off for every site. Only change it when Supertext gives you another address.'|t('supertext-translation'),
+    instructions: 'Address of Supertext\'s review service, used for sites with Translation review on (see Languages below). Leave it empty to turn Translation review off for every site. Only change it when Supertext gives you another address.'|t('supertext-translation'),
     id: 'reviewUrl',
     name: 'reviewUrl',
     value: settings.reviewUrl,
@@ -66,8 +66,8 @@
 <hr>
 
 <h2>{{ 'Languages'|t('supertext-translation') }}</h2>
-<p>{{ 'Choose the Supertext language of each site: Supertext translates into it, and from it when the site is the source. The list preselects the site’s language where Supertext offers it, else its usual variant (e.g. “de” → German (Germany) de-DE, “en” → English (United States) en-US); save to keep the choice. A site marked “— choose —” has no obvious Supertext language and isn’t translated until you choose one.'|t('supertext-translation') }}</p>
-<p>{{ 'Translation review: translations into a site with it on go through Supertext’s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the entry is translated.'|t('supertext-translation') }}</p>
+<p>{{ 'Choose the Supertext language of each site: Supertext translates into it, and from it when the site is the source. The list preselects the site\'s language where Supertext offers it, else its usual variant (e.g. “de” → German (Germany) de-DE, “en” → English (United States) en-US); save to keep the choice. A site marked “— choose —” has no obvious Supertext language and isn\'t translated until you choose one.'|t('supertext-translation') }}</p>
+<p>{{ 'Translation review: translations into a site with it on go through Supertext\'s review service, so reviewers can check and correct them on the website with the Supertext Localization Review extension. Their corrections are used the next time the entry is translated.'|t('supertext-translation') }}</p>
 {% if not reviewAvailable %}
     <p class="warning">{{ 'The review service address is empty: Translation review is off for every site.'|t('supertext-translation') }}</p>
 {% endif %}
@@ -113,7 +113,7 @@
                         tip: info.configured ? 'Set in config/supertext-translation.php, which overrides this setting.'|t('supertext-translation') : null,
                     }) }}
                     {% if info.target is null %}
-                        <p class="error" data-supertext-not-mapped>{{ 'Not mapped: choose a Supertext language, or this site isn’t translated.'|t('supertext-translation') }}</p>
+                        <p class="error" data-supertext-not-mapped>{{ 'Not mapped: choose a Supertext language, or this site isn\'t translated.'|t('supertext-translation') }}</p>
                     {% endif %}
                 </td>
                 <td>

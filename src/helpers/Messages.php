@@ -83,8 +83,8 @@ final class Messages
     public static function fileError(string $code, array $params = []): string
     {
         return match ($code) {
-            'invalid_file' => Craft::t('supertext-translation', 'This file isn’t a valid XLIFF or HTML translation file.'),
-            'missing_metadata' => Craft::t('supertext-translation', 'This file wasn’t exported by the Supertext plugin, or its header was removed.'),
+            'invalid_file' => Craft::t('supertext-translation', 'This file isn\'t a valid XLIFF or HTML translation file.'),
+            'missing_metadata' => Craft::t('supertext-translation', 'This file wasn\'t exported by the Supertext plugin, or its header was removed.'),
             'too_large' => Craft::t('supertext-translation', 'The file is too large (at most 10 MB).'),
             'other_system' => Craft::t('supertext-translation', 'This file belongs to another system ({plugin}).', $params),
             'not_found' => Craft::t('supertext-translation', 'The entry this file was exported from no longer exists.'),
