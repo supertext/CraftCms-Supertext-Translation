@@ -9,6 +9,7 @@
 ### Changed
 
 - The plugin's icon under *Settings → Plugins* is now the Supertext logo instead of Craft's default plug.
+- The plugin's *Documentation* link (*Settings → Plugins*) opens the README on GitHub instead of the `docs` folder listing.
 
 ## 1.0.0 — 2026-11-09
 

@@ -5860,7 +5860,7 @@
                 "name": "Supertext Translation",
                 "developer": "Supertext AG",
                 "developerUrl": "https://www.supertext.com",
-                "documentationUrl": "https://github.com/Supertext/CraftCms-Supertext-Translation/tree/main/docs",
+                "documentationUrl": "https://github.com/supertext/CraftCms-Supertext-Translation/tree/main#supertext-translation-for-craft-cms",
                 "class": "supertext\\crafttranslation\\Plugin"
             },
             "autoload": {
@@ -5905,7 +5905,7 @@
             "support": {
                 "issues": "https://github.com/Supertext/CraftCms-Supertext-Translation/issues",
                 "source": "https://github.com/Supertext/CraftCms-Supertext-Translation",
-                "docs": "https://github.com/Supertext/CraftCms-Supertext-Translation/tree/main/docs"
+                "docs": "https://github.com/supertext/CraftCms-Supertext-Translation/tree/main#supertext-translation-for-craft-cms"
             },
             "transport-options": {
                 "symlink": true,
