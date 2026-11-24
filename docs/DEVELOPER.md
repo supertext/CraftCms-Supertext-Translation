@@ -28,6 +28,7 @@ apply(): set the values on the entry (and nested entries) in the target site, sa
 | Path | Responsibility |
 | --- | --- |
 | `src/Plugin.php` | Registers the permission `supertext-translation:translate`, the entry index action, the sidebar box (`Element::EVENT_DEFINE_SIDEBAR_HTML`), settings page, console controllers |
+| `src/icon.svg` | The plugin icon Craft shows under *Settings → Plugins* and in the plugin store listing: the Supertext logo (dark green S) |
 | `src/api/` | Wrapper around the Supertext SDK (`SupertextClient`, `CallableTransport`), language codes (`Languages`), Commando Center glue (`Reporting`, `ReportTransport`), exception. No Craft dependencies (HTTP through a transport callable), unit-tested on their own |
 | `lib/supertext-sdk/` | Bundled copy of the Supertext PHP SDK, namespace `supertext\crafttranslation\sdk` (see *Supertext SDK*) |
 | `lib/supertext-plugin-health/` | Bundled copy of Supertext Plugin Health (PHP), namespace `supertext\crafttranslation\pluginhealth` (see *Supertext Plugin Health*) |
