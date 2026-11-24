@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Regenerates docs/images from a freshly set-up demo (no translations yet) whose plugin
- * talks to stand-in.mjs (SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/, and
- * SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report so nothing reaches the live Commando Center).
+ * Regenerates docs/images from a freshly set-up demo (no translations yet). In CI the plugin
+ * translates with the real Supertext API (secret SUPERTEXT_API_KEY), so the guides show real
+ * translations; without a key it talks to stand-in.mjs (SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/).
+ * Reports always go to the stand-in (SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report), never to
+ * the live Commando Center.
  * See docs/DEVELOPER.md.
  *
  *   BASE_URL (default http://127.0.0.1:8090)
@@ -58,7 +60,7 @@ async function shot(page, locator, name, margin = 10) {
   await shot(page, box, '01-translate-box.png')
 
   await box.locator('.st-translate').click()
-  await box.locator('.st-results li').first().waitFor({ timeout: 60_000 })
+  await box.locator('.st-results li').first().waitFor({ timeout: 300_000 }) // the real API takes a while
   await shot(page, box, '02-translated.png')
 
   // The German version of the entry.
