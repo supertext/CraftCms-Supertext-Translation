@@ -6,7 +6,10 @@
  * is checked: the article and its nested Highlight entries have a translation in every site,
  * the texts are really in the target language (de-CH without "ß"), formatting and links
  * survived, nothing was enabled or disabled, and translating again (with "Overwrite existing
- * translations") updates the same records instead of duplicating them.
+ * translations") updates the same records instead of duplicating them. Then the page "About us"
+ * (an entry nested in CKEditor, a table, a link), the category, the global set "Footer" and the
+ * image are translated with their boxes: every site gets text in its language, and the page's
+ * nested callout is a translated entry of each site's own.
  * See "End-to-end tests" in docs/DEVELOPER.md.
  *
  *   CRAFT_URL=http://127.0.0.1:8081 DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/craft_live \
@@ -212,6 +215,63 @@ check('translating again updates the same site rows (no duplicates)', second.row
 for (const site of targets) {
 	const changedAgain = items.filter((id) => second.bySite[site.id]?.[id]?.title && second.bySite[site.id][id].title !== source[id].title).length;
 	check(`${site.handle} (${site.language}): still translated after the second run`, changedAgain >= Math.ceil(items.length * 0.8), `${changedAgain}/${items.length} titles`);
+}
+
+// --- The other content: page (entry nested in CKEditor, table, link), category, global set, image ---
+/** Translates the item into every target site with the Supertext box on its edit page. */
+async function translateWithBox(label, url) {
+	await page.goto(`${B}${url}`);
+	const box = page.locator('.supertext-box');
+	await box.locator('.st-translate, .supertext-body > p').first().waitFor();
+	for (const site of targets) await tick(box, `st-site-${site.id}`);
+	await box.locator('.st-translate').click();
+	await box.locator('.st-results li').first().waitFor({ timeout: 900_000 });
+	await page.screenshot({ path: `${artifacts}${label}-result.png`, fullPage: true });
+	const ok = await box.locator('.st-results li.ok').count();
+	const errors = await box.locator('.st-results li.error').allTextContents();
+	check(`${label}: every site translated`, ok === targets.length, `${ok}/${targets.length} ${errors.join(' | ')}`);
+}
+
+/** Every text of an element in one site: title, alternative text and the strings in its content. */
+async function textsOf(id, siteId) {
+	const [row] = await q('SELECT es.title, es.content, a.alt FROM elements_sites es LEFT JOIN assets_sites a ON a."assetId" = es."elementId" AND a."siteId" = es."siteId" WHERE es."elementId" = $1 AND es."siteId" = $2', [id, siteId]);
+	const strings = [];
+	const walk = (v) => (typeof v === 'string' ? strings.push(v) : v && typeof v === 'object' ? Object.values(v).forEach(walk) : null);
+	walk(row?.content ?? {});
+	return [row?.title ?? '', row?.alt ?? '', ...strings].filter((s) => /\p{L}{3}/u.test(plain(s)) && !/^https?:/.test(s)).map(plain).join(' ');
+}
+
+const [pageEntry] = await q(`SELECT e.id FROM entries e JOIN sections s ON s.id = e."sectionId" JOIN elements el ON el.id = e.id WHERE s.handle = 'pages' AND ${live} LIMIT 1`);
+const [category] = await q('SELECT c.id FROM categories c JOIN elements el ON el.id = c.id WHERE el."dateDeleted" IS NULL LIMIT 1');
+const [footer] = await q(`SELECT id FROM globalsets WHERE handle = 'footer'`);
+const [image] = await q('SELECT a.id FROM assets a JOIN elements el ON el.id = a.id WHERE el."dateDeleted" IS NULL LIMIT 1');
+const others = [
+	['page', pageEntry?.id, `/admin/content/entries/pages/${pageEntry?.id}?site=${sourceSite.handle}`],
+	['category', category?.id, `/admin/categories/topics/${category?.id}?site=${sourceSite.handle}`],
+	['footer', footer?.id, `/admin/globals/footer?site=${sourceSite.handle}`],
+	['image', image?.id, `/admin/assets/edit/${image?.id}?site=${sourceSite.handle}`],
+];
+for (const [label, id, url] of others) {
+	if (!check(`${label}: exists in the demo`, !!id)) continue;
+	const sourceText = await textsOf(id, sourceSite.id);
+	await translateWithBox(label, url);
+	for (const site of targets) {
+		const lang = site.language.split(/[-_]/)[0].toLowerCase();
+		const text = await textsOf(id, site.id);
+		check(`${label} ${site.handle}: translated`, text !== '' && text !== sourceText);
+		const scores = Object.fromEntries(Object.keys(STOPWORDS).map((l) => [l, score(text, l)]));
+		const best = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0];
+		if (Object.values(scores).some((n) => n > 0)) check(`${label} ${site.handle}: text is in the target language`, best === lang, JSON.stringify(scores));
+	}
+}
+if (pageEntry) {
+	// The callout inside the CKEditor field: each site has its own, translated, and its HTML points to it.
+	for (const site of targets) {
+		const [row] = await q('SELECT content::text AS c FROM elements_sites WHERE "elementId" = $1 AND "siteId" = $2', [pageEntry.id, site.id]);
+		const ids = [...(row?.c ?? '').matchAll(/data-entry-id=\\"(\d+)\\"/g)].map((m) => Number(m[1]));
+		const callouts = ids.length ? await q('SELECT es.title FROM elements_sites es WHERE es."elementId" = ANY($1) AND es."siteId" = $2', [ids, site.id]) : [];
+		check(`page ${site.handle}: nested callout of its own, translated`, callouts.length === 1 && callouts[0].title && callouts[0].title !== 'Free delivery', JSON.stringify(callouts));
+	}
 }
 
 await browser.close();

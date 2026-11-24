@@ -16,13 +16,15 @@ use supertext\crafttranslation\sdk\Files\TranslationFileError;
 use supertext\crafttranslation\sdk\Files\TranslationFiles;
 
 /**
- * "Export for translation" and "Import translation": an entry's texts as an XLIFF 1.2 or HTML
- * file (the SDK's `Files\TranslationFiles`), translated outside the API, and the translated file
- * written back like an API translation.
+ * "Export for translation" and "Import translation": the texts of an entry, category, global set or
+ * asset as an XLIFF 1.2 or HTML file (the SDK's `Files\TranslationFiles`), translated outside the
+ * API, and the translated file written back like an API translation.
  *
- * One job = one entry from its source site into one target site. The segments are the units the
- * API translation collects (`Translator::fileSegments()`), keyed `<element id>.<title|slug|field handle>`.
- * Reference: `entry:<entry id>:site-<source site id>:site-<target site id>`, e.g. `entry:5:site-1:site-3`.
+ * One job = one element from its source site into one target site. The segments are the units the
+ * API translation collects (`Translator::fileSegments()`), keyed `<element id>.<title|slug|alt|field handle>`
+ * (plus `.<path>` for texts inside a field).
+ * Reference: `<type>:<element id>:site-<source site id>:site-<target site id>`, type `entry`,
+ * `category`, `global` or `asset`, e.g. `entry:5:site-1:site-3`. Element ids are unique across types.
  *
  * No Craft dependencies (tests/unit/FileExchangeTest.php); Translator loads and writes the entries.
  */
@@ -44,21 +46,32 @@ final class FileExchange
     public const FORBIDDEN = 'forbidden';
     public const ALREADY_TRANSLATED = 'already_translated';
 
-    private const REFERENCE = '/^entry:([1-9]\d*):site-([1-9]\d*):site-([1-9]\d*)$/';
+    /** Element types in references. */
+    public const TYPES = ['entry', 'category', 'global', 'asset'];
 
-    public static function reference(int $entryId, int $sourceSiteId, int $targetSiteId): string
+    private const REFERENCE = '/^(entry|category|global|asset):([1-9]\d*):site-([1-9]\d*):site-([1-9]\d*)$/';
+
+    public static function reference(int $elementId, int $sourceSiteId, int $targetSiteId, string $type = 'entry'): string
     {
-        return "entry:$entryId:site-$sourceSiteId:site-$targetSiteId";
+        if (!\in_array($type, self::TYPES, true)) {
+            throw new \InvalidArgumentException("Unknown element type: $type");
+        }
+
+        return "$type:$elementId:site-$sourceSiteId:site-$targetSiteId";
     }
 
-    /** @return array{entryId: int, sourceSiteId: int, targetSiteId: int}|null */
+    /**
+     * `entryId` is the element's id (an entry's, a category's, …; the key keeps its name for the import results).
+     *
+     * @return array{type: string, entryId: int, sourceSiteId: int, targetSiteId: int}|null
+     */
     public static function parseReference(string $reference): ?array
     {
         if (!preg_match(self::REFERENCE, $reference, $m)) {
             return null;
         }
 
-        return ['entryId' => (int) $m[1], 'sourceSiteId' => (int) $m[2], 'targetSiteId' => (int) $m[3]];
+        return ['type' => $m[1], 'entryId' => (int) $m[2], 'sourceSiteId' => (int) $m[3], 'targetSiteId' => (int) $m[4]];
     }
 
     /** A site language as a language tag (`de_CH` → `de-CH`), for sites without a Supertext code. */
@@ -68,14 +81,14 @@ final class FileExchange
     }
 
     /**
-     * The file for one entry and the given target sites (XLIFF: one or more, HTML: exactly one), or
-     * null when the entry has nothing to translate.
+     * The file for one element and the given target sites (XLIFF: one or more, HTML: exactly one), or
+     * null when the element has nothing to translate.
      *
      * @param list<array{key: string, text: string, html: bool}> $segments
      * @param list<array{siteId: int, handle: string, language: string}> $targets `language`: the Supertext code (or the fallback code)
      * @return array{content: string, filename: string, contentType: string}|null
      */
-    public static function export(int $entryId, int $sourceSiteId, string $sourceLanguage, array $targets, array $segments, string $format): ?array
+    public static function export(int $entryId, int $sourceSiteId, string $sourceLanguage, array $targets, array $segments, string $format, string $type = 'entry'): ?array
     {
         if ($targets === []) {
             throw new \InvalidArgumentException('Choose at least one target site.');
@@ -96,7 +109,7 @@ final class FileExchange
 
         $jobs = [];
         foreach ($targets as $target) {
-            $jobs[] = new FileJob(self::PLUGIN, self::reference($entryId, $sourceSiteId, $target['siteId']), $sourceLanguage, $target['language'], $fileSegments);
+            $jobs[] = new FileJob(self::PLUGIN, self::reference($entryId, $sourceSiteId, $target['siteId'], $type), $sourceLanguage, $target['language'], $fileSegments);
         }
 
         $name = 'craft-' . $entryId . (\count($targets) === 1 ? '-' . preg_replace('/[^A-Za-z0-9_-]+/', '', $targets[0]['handle']) : '');
@@ -119,7 +132,7 @@ final class FileExchange
     /**
      * Imports one job of a file.
      *
-     * `$open(entryId, sourceSiteId, targetSiteId)` loads the entry and the target site with the user's
+     * `$open(elementId, sourceSiteId, targetSiteId)` loads the element and the target site with the user's
      * permissions and returns either `['error' => <code>, 'params' => [...]]` or
      * `['title' => …, 'site' => …, 'segments' => <current segments, as for the export>, 'write' => callable(array<string, string> key => text)]`.
      *

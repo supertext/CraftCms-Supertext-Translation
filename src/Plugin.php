@@ -13,7 +13,11 @@ use craft\base\Element;
 use craft\base\Model;
 use craft\base\Plugin as BasePlugin;
 use craft\console\Application as ConsoleApplication;
+use craft\base\ElementInterface;
+use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
+use craft\elements\GlobalSet;
 use craft\events\DefineHtmlEvent;
 use craft\events\RegisterElementActionsEvent;
 use craft\events\RegisterUserPermissionsEvent;
@@ -31,10 +35,12 @@ use supertext\crafttranslation\web\assets\translate\TranslateAsset;
 use yii\base\Event;
 
 /**
- * Supertext Translation: translates entries into the plugin's other sites with Supertext AI.
+ * Supertext Translation: translates entries, categories, global sets and assets into the other
+ * sites with Supertext AI.
  *
- * - Entry edit page: a "Supertext" box in the sidebar (choose sites, translate)
- * - Entry index: a "Translate with Supertext" action (queue jobs, missing translations only)
+ * - Edit pages of entries, categories and assets: a "Supertext" box in the sidebar (choose sites,
+ *   translate); global sets: the same box below their fields
+ * - Entry, category and asset indexes: a "Translate with Supertext" action (queue jobs, missing translations only)
  * - Settings: API key, environment, languages and tone, Test connection, version reports
  * - Console: php craft supertext-translation/translate
  * - Commando Center: version reports, API key check, public ping (actions/supertext-translation/ping)
@@ -69,24 +75,33 @@ class Plugin extends BasePlugin
             $event->permissions[] = [
                 'heading' => 'Supertext',
                 'permissions' => [
-                    self::PERMISSION => ['label' => Craft::t('supertext-translation', 'Translate entries with Supertext')],
+                    self::PERMISSION => ['label' => Craft::t('supertext-translation', 'Translate content with Supertext')],
                 ],
             ];
         });
 
-        Event::on(Entry::class, Element::EVENT_REGISTER_ACTIONS, function (RegisterElementActionsEvent $event) {
-            if (Craft::$app->getIsMultiSite() && Craft::$app->getUser()->checkPermission(self::PERMISSION)) {
-                $event->actions[] = TranslateWithSupertext::class;
-            }
-        });
+        foreach ([Entry::class, Category::class, Asset::class] as $type) {
+            Event::on($type, Element::EVENT_REGISTER_ACTIONS, function (RegisterElementActionsEvent $event) {
+                if (Craft::$app->getIsMultiSite() && Craft::$app->getUser()->checkPermission(self::PERMISSION)) {
+                    $event->actions[] = TranslateWithSupertext::class;
+                }
+            });
 
-        Event::on(Entry::class, Element::EVENT_DEFINE_SIDEBAR_HTML, function (DefineHtmlEvent $event) {
-            /** @var Entry $entry */
-            $entry = $event->sender;
-            $html = $this->sidebarHtml($entry);
-            if ($html !== '') {
-                $event->html = $html . $event->html;
-            }
+            Event::on($type, Element::EVENT_DEFINE_SIDEBAR_HTML, function (DefineHtmlEvent $event) {
+                /** @var ElementInterface $element */
+                $element = $event->sender;
+                $html = $this->boxHtml($element);
+                if ($html !== '') {
+                    $event->html = $html . $event->html;
+                }
+            });
+        }
+
+        // Global sets have their own edit page without a sidebar: the box goes below the fields.
+        Craft::$app->getView()->hook('cp.globals.edit.content', function (array &$context) {
+            $globalSet = $context['globalSet'] ?? null;
+
+            return $globalSet instanceof GlobalSet ? $this->boxHtml($globalSet) : '';
         });
     }
 
@@ -168,17 +183,17 @@ class Plugin extends BasePlugin
         ]);
     }
 
-    /** The Supertext box on the entry edit page (canonical entries in a multi-site install only). */
-    private function sidebarHtml(Entry $entry): string
+    /** The Supertext box on an edit page (saved, canonical elements in a multi-site install only). */
+    private function boxHtml(ElementInterface $element): string
     {
         $request = Craft::$app->getRequest();
-        if (!$request->getIsCpRequest() || $request->getIsConsoleRequest() || !$entry->id) {
+        if (!$request->getIsCpRequest() || $request->getIsConsoleRequest() || !$element->id) {
             return '';
         }
-        if ($entry->getIsRevision() || ($entry->getIsDraft() && !$entry->isProvisionalDraft) || $entry->getIsUnpublishedDraft()) {
+        if ($element->getIsRevision() || ($element->getIsDraft() && !$element->isProvisionalDraft) || $element->getIsUnpublishedDraft()) {
             return '';
         }
-        if (!Craft::$app->getUser()->checkPermission(self::PERMISSION) || \count($entry->getSupportedSites()) < 2) {
+        if (!Craft::$app->getUser()->checkPermission(self::PERMISSION) || \count($element->getSupportedSites()) < 2) {
             return '';
         }
 
@@ -187,8 +202,9 @@ class Plugin extends BasePlugin
         $view->registerTranslations('supertext-translation', TranslateAsset::MESSAGES);
 
         return $view->renderTemplate('supertext-translation/_sidebar', [
-            'entryId' => $entry->getCanonicalId(),
-            'siteId' => $entry->siteId,
+            'elementId' => $element->getCanonicalId(),
+            'siteId' => $element->siteId,
+            'below' => $element instanceof GlobalSet,
         ]);
     }
 }

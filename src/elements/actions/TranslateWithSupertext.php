@@ -15,9 +15,9 @@ use craft\helpers\Queue;
 use supertext\crafttranslation\jobs\TranslateEntryJob;
 
 /**
- * Entry index action: queues a translation of each selected entry from the site the
- * index shows into all its other sites. Sites that already have their own text are
- * skipped (use the entry's Supertext box to overwrite them).
+ * Index action (entries, categories, assets): queues a translation of each selected item from
+ * the site the index shows into all its other sites. Sites that already have their own text
+ * are skipped (use the item's Supertext box to overwrite them).
  */
 class TranslateWithSupertext extends ElementAction
 {
@@ -28,18 +28,22 @@ class TranslateWithSupertext extends ElementAction
 
     public function getConfirmationMessage(): ?string
     {
-        return Craft::t('supertext-translation', 'Translate the selected entries into all their other sites? Sites that already have their own text are skipped.');
+        return Craft::t('supertext-translation', 'Translate the selected items into all their other sites? Sites that already have their own text are skipped.');
     }
 
     public function performAction(ElementQueryInterface $query): bool
     {
         $user = Craft::$app->getUser()->getIdentity();
         $count = 0;
-        foreach ($query->all() as $entry) {
+        foreach ($query->all() as $element) {
             $siteIds = [];
-            foreach ($entry->getSupportedSites() as $site) {
+            foreach ($element->getSupportedSites() as $site) {
+                // Sites the item isn't saved to (e.g. assets in a volume that lets each asset choose) are left out.
+                if (\is_array($site) && ($site['propagate'] ?? true) === false) {
+                    continue;
+                }
                 $siteId = \is_array($site) ? (int) $site['siteId'] : (int) $site;
-                if ($siteId !== (int) $entry->siteId) {
+                if ($siteId !== (int) $element->siteId) {
                     $siteIds[] = $siteId;
                 }
             }
@@ -47,15 +51,15 @@ class TranslateWithSupertext extends ElementAction
                 continue;
             }
             Queue::push(new TranslateEntryJob([
-                'entryId' => $entry->getCanonicalId(),
-                'sourceSiteId' => (int) $entry->siteId,
+                'entryId' => $element->getCanonicalId(),
+                'sourceSiteId' => (int) $element->siteId,
                 'targetSiteIds' => $siteIds,
                 'userId' => $user?->id,
             ]));
             $count++;
         }
 
-        $this->setMessage(Craft::t('supertext-translation', '{count, plural, =1{One entry is} other{# entries are}} being translated in the background.', ['count' => $count]));
+        $this->setMessage(Craft::t('supertext-translation', '{count, plural, =1{One item is} other{# items are}} being translated in the background.', ['count' => $count]));
 
         return true;
     }

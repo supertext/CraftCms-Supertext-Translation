@@ -1,8 +1,8 @@
 # User guide — Supertext Translation for Craft CMS
 
-For editors who translate entries in the Craft control panel. Your administrator has installed the plugin and set up a site for each language (see the [installation guide](INSTALLATION.md)).
+For editors who translate content in the Craft control panel: entries, categories, global sets and images (assets). Your administrator has installed the plugin and set up a site for each language (see the [installation guide](INSTALLATION.md)).
 
-In Craft, every language is a **site**, and an entry has a version in each site. Supertext fills the other sites' versions with a translation of the site you're in.
+In Craft, every language is a **site**, and an entry (category, global set, image) has a version in each site. Supertext fills the other sites' versions with a translation of the site you're in.
 
 The Supertext box and its messages appear in your control panel language (English, German, French or Italian).
 
@@ -21,11 +21,23 @@ Each language takes a few seconds. The box then lists the result per site, with 
 
 ![The box after translating: Deutsch, Français and Italiano translated, each with an Open link](images/02-translated.png)
 
+## Categories, global sets and images
+
+Categories and images (assets) have the same **Translate with Supertext** box in the sidebar of their edit page; global sets have it below their fields. It works exactly like on an entry.
+
+![A global set (Footer) with its Tagline and Contact link fields, and the Translate with Supertext box below them](images/10-global-set.png)
+
+Only entries have revisions: a translation of a category, global set or image replaces the target site's texts without keeping the previous version.
+
 ## Review the translation
 
-Click **Open** (or switch the site at the top left). The translation is saved in that site's version of the entry, exactly as if you had typed it: title, slug, texts, rich text with its headings, bold text, links and lists, and the entries inside Matrix fields.
+Click **Open** (or switch the site at the top left). The translation is saved in that site's version of the entry, exactly as if you had typed it: title, slug, texts, rich text with its headings, bold text, links and lists, and the entries inside Matrix and CKEditor fields.
 
 ![The German version of the sample article: title, summary, formatted body and the highlights in German](images/03-german-entry.png)
+
+Entries inside a CKEditor field, table cells and link labels are translated too:
+
+![The German version of the page "About us": the text around a nested Callout entry (Kostenlose Lieferung), the Facts table and the Call to action link label, all in German](images/09-german-page.png)
 
 Change what you like and **Save**. The site's status (enabled or disabled) doesn't change: if a site's version was live before, the translation is live right away. To review first, disable the entry for that site, translate, review, then enable it.
 
@@ -46,20 +58,20 @@ Sites that already have their own text are not ticked, and show **Already transl
 
 ## Translate with a file (XLIFF or HTML)
 
-Instead of translating with Supertext's API, you can download an entry's texts as a file, have them translated elsewhere (a translator, a translation tool such as Trados, memoQ or Phrase, or Supertext's web app) and import the translated file again. The translations are saved exactly like a translation with Supertext: in the target site's version of the entry, as a new revision.
+Instead of translating with Supertext's API, you can download the texts of an entry (category, global set, image) as a file, have them translated elsewhere (a translator, a translation tool such as Trados, memoQ or Phrase, or Supertext's web app) and import the translated file again. The translations are saved exactly like a translation with Supertext: in the target site's version of the entry, as a new revision.
 
 **Export for translation:** open the entry in the site you translate **from** (save your changes first). In the Supertext box, open **Export for translation**.
 
 1. Choose the **File format**:
    - **XLIFF 1.2 (for translation tools)**: the better choice for translators and translation tools; bold text, links and other formatting appear as protected tags. One file can hold several sites.
    - **HTML (one language per file)**: for Supertext's web app or anyone who translates HTML. Tick exactly one site.
-2. Tick the sites under **Into** and click **Download file**. The file is called e.g. `craft-12-fr.xlf` (entry ID and site handle; `craft-12.xlf` for several sites).
+2. Tick the sites under **Into** and click **Download file**. The file is called e.g. `craft-12-fr.xlf` (ID and site handle; `craft-12.xlf` for several sites).
 
-The file holds the same texts a translation with Supertext would send: title, slug (as words), Plain Text and rich text fields, and the entries inside Matrix fields. An entry without texts gives *Nothing to translate.*
+The file holds the same texts a translation with Supertext would send (see [What is translated](#what-is-translated)). An entry without texts gives *Nothing to translate.*
 
 **Send it for translation.** Translators must keep the file's structure: in an HTML file the head (the `supertext:` meta tags) and the `data-st-id` attributes must stay as they are. An HTML file can't mark a text as untranslated: imported unchanged, it writes the source text into the target site.
 
-**Import translation:** in the Supertext box of any entry (the file says which entry and sites it belongs to), open **Import translation**, choose the **Translated file (XLIFF or HTML)** and click **Import translation**. Files up to 10 MB.
+**Import translation:** in the Supertext box of any entry, category, global set or image (the file says which one and which sites it belongs to), open **Import translation**, choose the **Translated file (XLIFF or HTML)** and click **Import translation**. Files up to 10 MB.
 
 - **Also import texts whose source changed since the export** (off by default): texts edited in the source site after the export are skipped unless you tick this.
 - **Overwrite existing translations** (off by default): like translating with Supertext, a site that already has its own text is skipped (*This site already has its own text …*) unless you tick this.
@@ -74,11 +86,11 @@ The summary shows, per entry and site:
 | *Formatting changed, not imported: n* | The translation broke or added formatting (tags); fix it in the file or translate these texts again. |
 | *Not in the file: n* | Texts added since the export; translate them with Supertext or export again. |
 
-Texts that weren't imported keep their current value in the target site. Errors: *This file isn't a valid XLIFF or HTML translation file*, *This file wasn't exported by the Supertext plugin, or its header was removed*, *The file is too large (at most 10 MB)*, *This file belongs to another system (…)* (exported by another Supertext plugin), *The entry this file was exported from no longer exists*, *The site has no language …* (the site was deleted or the entry isn't available in it any more), *You are not allowed to edit the entry in this site.*
+Texts that weren't imported keep their current value in the target site. Errors: *This file isn't a valid XLIFF or HTML translation file*, *This file wasn't exported by the Supertext plugin, or its header was removed*, *The file is too large (at most 10 MB)*, *This file belongs to another system (…)* (exported by another Supertext plugin), *The content this file was exported from no longer exists*, *The site has no language …* (the site was deleted or the content isn't available in it any more), *You are not allowed to edit this content in this site.*
 
 ## Translate many entries at once
 
-In the entry list, select entries, open the **actions menu** (gear icon) and choose **Translate with Supertext**. Each selected entry is translated from the site the list shows into all its other sites, in the background. Sites that already have their own text are skipped; to overwrite them, use the box on the entry page.
+In the list of entries (or categories, or assets), select items, open the **actions menu** (gear icon) and choose **Translate with Supertext**. Each selected item is translated from the site the list shows into all its other sites, in the background. Sites that already have their own text are skipped; to overwrite them, use the box on the item's page.
 
 ![The entry index with an entry selected and the actions menu open](images/05-index-action.png)
 
@@ -88,15 +100,20 @@ Progress and errors appear in Craft's queue indicator (bottom left); failed jobs
 
 | Content | What happens |
 | --- | --- |
-| Title | Translated (unless the entry type's title is *Not translatable*) |
-| Slug | Translated as words and turned back into a slug, e.g. `swiss-chocolate-shipped-worldwide` → `schweizer-schokolade-weltweit-versandt`. A one-word slug stays as it is. |
+| Title | Translated (unless the title is *Not translatable*). Image titles only when they are words: a file name such as `IMG_1234` stays. |
+| Slug (entries, categories) | Translated as words and turned back into a slug, e.g. `swiss-chocolate-shipped-worldwide` → `schweizer-schokolade-weltweit-versandt`. A one-word slug stays as it is. |
+| Alternative text (images) | Translated, if the volume translates it per site |
 | Plain Text fields | Translated, line breaks kept |
 | CKEditor (and Redactor) fields | Translated as HTML: headings, bold, italic, links and lists stay in place, link addresses are kept |
+| Entries inside a CKEditor field | Their title and fields are translated. If the CKEditor field is translated per site, each site has its own copies of these entries: the target site's entries are updated in the same order, missing ones are copied from the source, and ones the target no longer needs are deleted. |
 | Matrix fields | The title and the fields above of each nested entry are translated |
+| Table fields | Cells of *Single-line text*, *Multi-line text* and *Row heading* columns are translated; other cells (numbers, dates, checkboxes, …) stay as they are. If the target has a different number of rows, it gets the source's rows. |
+| Link fields | The label (and the title text and ARIA label, if the field shows them) are translated; the address stays |
+| SEOmatic fields | Texts you wrote yourself (SEO title, description, keywords, image description and their Facebook/Twitter versions) are translated; texts SEOmatic takes from other fields or templates (`{{ … }}`) stay as they are |
 | Fields that are *Not translatable* | Not touched (they are the same in every site) |
-| Other field types (numbers, dates, assets, relations, dropdowns, tables, links, …) | Not translated |
+| Other field types (numbers, dates, assets, relations, dropdowns, …) | Not translated |
 
-Empty fields are skipped. Entries nested inside CKEditor fields are not translated yet.
+Empty fields are skipped.
 
 ## Messages
 
@@ -104,8 +121,9 @@ Empty fields are skipped. Entries nested inside CKEditor fields are not translat
 | --- | --- |
 | *Supertext is not set up yet: …* | No API key. Ask your administrator. |
 | *already translated, skipped* | The site has its own text and *Overwrite existing translations* was off. |
-| *You are not allowed to edit the entry in this site.* | Your user group may not edit that site or the section. |
-| *The entry is not available in this site.* | The entry isn't enabled in that site. |
+| *You are not allowed to edit this content in this site.* | Your user group may not edit that site, or the section (category group, global set, volume). |
+| *This content is not available in this site.* | The entry (image, …) isn't saved to that site. |
+| *This content exists in no other site you can edit.* | There is no other site to translate into, or you may not edit any of them. |
 | *Authentication failed. Please check the Supertext API key.* | The API key is wrong. Ask your administrator. |
 | *Your Supertext translation limit is exceeded.* | Your organisation's Supertext limit is used up. |
 | *Supertext does not support this language pair (en → …).* | Supertext can't translate into this site's language, or its Supertext language is set wrong. Tell your administrator. |

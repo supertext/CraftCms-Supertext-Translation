@@ -25,11 +25,31 @@ final class FileExchangeTest extends TestCase
     public function testReferenceRoundTrip(): void
     {
         self::assertSame('entry:5:site-1:site-3', FileExchange::reference(5, 1, 3));
-        self::assertSame(['entryId' => 5, 'sourceSiteId' => 1, 'targetSiteId' => 3], FileExchange::parseReference('entry:5:site-1:site-3'));
-        foreach (['', 'entry:5', 'entry:5:site-1', 'entry:0:site-1:site-3', 'page:5:site-1:site-3', 'entry:5:1:3', 'entry:5:site-1:site-3:x'] as $invalid) {
+        self::assertSame(['type' => 'entry', 'entryId' => 5, 'sourceSiteId' => 1, 'targetSiteId' => 3], FileExchange::parseReference('entry:5:site-1:site-3'));
+        // Categories, global sets and assets: their own prefix, the same element ids.
+        foreach (['category', 'global', 'asset'] as $type) {
+            self::assertSame("$type:7:site-2:site-1", FileExchange::reference(7, 2, 1, $type));
+            self::assertSame(['type' => $type, 'entryId' => 7, 'sourceSiteId' => 2, 'targetSiteId' => 1], FileExchange::parseReference("$type:7:site-2:site-1"));
+        }
+        foreach (['', 'entry:5', 'entry:5:site-1', 'entry:0:site-1:site-3', 'page:5:site-1:site-3', 'entry:5:1:3', 'entry:5:site-1:site-3:x', 'user:5:site-1:site-3'] as $invalid) {
             self::assertNull(FileExchange::parseReference($invalid), $invalid);
         }
         self::assertSame('de-CH', FileExchange::fallbackCode('de_CH'));
+    }
+
+    public function testOtherElementTypesAndTextsInsideFieldsRoundTrip(): void
+    {
+        $segments = [
+            ['key' => '7.title', 'text' => 'Chocolate', 'html' => false],
+            ['key' => '7.facts.table:0:col1', 'text' => 'Founded', 'html' => false],
+            ['key' => '7.cta.link:label', 'text' => 'Visit us', 'html' => false],
+            ['key' => '7.content.chunk:2', 'text' => '<p>Thanks for <b>reading</b>.</p>', 'html' => true],
+        ];
+        $file = FileExchange::export(7, 1, 'en', [self::FR], $segments, FileExchange::FORMAT_XLIFF, 'category');
+        $jobs = FileExchange::read($file['content']);
+
+        self::assertSame('category:7:site-1:site-3', $jobs[0]->reference);
+        self::assertSame(array_column($segments, 'key'), array_map(static fn ($u) => $u->key, $jobs[0]->units));
     }
 
     public function testXliffExportHasTheCollectorsKeysAndOneJobPerSite(): void

@@ -6,7 +6,7 @@ For administrators who install and set up the plugin. Editors find their part in
 
 - Craft CMS 5 (any edition; giving editors their own permissions needs user groups, i.e. Craft Team or Pro), PHP 8.2 or later
 - A multi-site setup: one site per language, e.g. *English* (`en-US`), *Deutsch* (`de-CH`), *Français* (`fr-CH`)
-- Sections whose entries exist in those sites (*Propagation method* other than "Only save entries to the site they were created in")
+- Sections whose entries exist in those sites (*Propagation method* other than "Only save entries to the site they were created in"); the same for category groups and volumes (assets) you want to translate
 - A Supertext account with an API key (see [API key](#api-key))
 - The server must reach `https://api.supertext.com` over HTTPS (and, for [Translation review](#translation-review), Supertext's review service)
 
@@ -123,17 +123,17 @@ Turn it on per language for the site that is translated **into** (*Settings → 
 
 ## Which fields are translated
 
-The plugin translates fields that are translatable in Craft: their **Translation Method** (in the field's settings, or the field layout override) is anything but *Not translatable*. Fields that are the same in every site are left alone. Supported field types: Plain Text, CKEditor (and Redactor), Matrix (the fields of its nested entries), plus each entry's title and slug. Details in the [user guide](USER_GUIDE.md#what-is-translated).
+The plugin translates **entries, categories, global sets and assets**, and the fields that are translatable in Craft: their **Translation Method** (in the field's settings, or the field layout override) is anything but *Not translatable*. Fields that are the same in every site are left alone. Supported field types: Plain Text, CKEditor (and Redactor, with the entries nested in CKEditor), Matrix (the fields of its nested entries), Table (text columns), Link (label, title text, ARIA label) and SEOmatic's *SEO Settings* (texts written by hand), plus titles, slugs and the assets' alternative text. Asset alternative texts are translated only if the volume's *Alternative Text Translation Method* isn't *Not translatable* (new volumes start with *Not translatable*). Details in the [user guide](USER_GUIDE.md#what-is-translated).
 
 ## Permissions
 
 Editors need, in their user group (*Settings → Users → User Groups*):
 
-- **Supertext → Translate entries with Supertext**
+- **Supertext → Translate content with Supertext** (called *Translate entries with Supertext* before; the permission is the same)
 - *Access the control panel*, *Edit* permission for **each site** they translate into (*Sites → Edit "Deutsch"*, …)
-- The section's *View entries* and *Save entries* (and *View/Save other authors' entries* if the entries aren't theirs)
+- The section's *View entries* and *Save entries* (and *View/Save other authors' entries* if the entries aren't theirs); for categories, global sets and assets the matching permissions of the category group (*Save categories*), global set (*Edit "Footer"*) or volume (*Save assets*, and *Save assets uploaded by other users*)
 
-The plugin checks that the editor may save the entry in every target site before anything is sent to Supertext. Sites they can't edit don't appear in the Supertext box.
+The plugin checks that the editor may save the entry (category, global set, asset) in every target site before anything is sent to Supertext. Sites they can't edit don't appear in the Supertext box.
 
 **Export for translation / Import translation** (XLIFF 1.2 or HTML files, in the Supertext box) need the same permission; an import saves only into sites where the editor may save the entry, each entry and site in the file is checked. Uploads are limited to 10 MB (PHP's `upload_max_filesize` and `post_max_size` must allow that much, or larger files are refused earlier) and are only read in memory, never stored. There is nothing to configure, and no API key is needed for files.
 
@@ -178,13 +178,13 @@ The plugin's box, settings, permission and messages are available in English, Ge
 
 ## Background translation
 
-The entry index action *Translate with Supertext* translates in Craft's queue. Craft runs the queue automatically on control panel requests; on busy or headless setups run a queue worker (`php craft queue/listen`) or a cron job (`php craft queue/run`).
+The index action *Translate with Supertext* (entries, categories, assets) translates in Craft's queue. Craft runs the queue automatically on control panel requests; on busy or headless setups run a queue worker (`php craft queue/listen`) or a cron job (`php craft queue/run`).
 
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 | --- | --- |
-| No Supertext box on the entry page | Craft has only one site, the entry exists in only one site, or the user lacks the *Translate entries with Supertext* permission. |
+| No Supertext box on the edit page | Craft has only one site, the entry (category, global set, asset) exists in only one site, or the user lacks the *Translate content with Supertext* permission. The box is in the sidebar; on global sets it's below the fields. |
 | *Supertext is not set up yet* | The API key setting is empty or its environment variable isn't set on this server. |
 | *Authentication failed. Please check the Supertext API key.* | Wrong or revoked key, or a key for another environment (*Live* vs *Staging*). Use *Test connection*. |
 | *Supertext rejected the API key* (API key check) | The key is wrong or revoked. Check that the whole key is in `SUPERTEXT_API_KEY`, or generate a new one at [supertext.com → Integrations → API](https://www.supertext.com/en/integrations/api) (Admin role required). No Supertext account yet? [Create one](https://www.supertext.com/person/en/account/signin). Then *Test connection*. |
@@ -193,8 +193,10 @@ The entry index action *Translate with Supertext* translates in Craft's queue. C
 | *Supertext offers no formal or informal tone for this language* | *Form of address* is *Formal* or *Informal* for a language without that choice (English, Swiss German, Romansh, Albanian, Serbian), saved by an older version or set in `config/supertext-translation.php`. Save the settings page once (it resets the hidden choice to *Default*) or fix the config file. |
 | *Authentication failed* only for sites with *Translation review* | The review service only works with keys of the live Supertext API: with *Staging*/*Testing* (or a *Custom API address*) leave review off. |
 | Reviewers' corrections don't show up in Craft | They arrive with the next translation: translate the entries into that site again with *Overwrite existing translations*. Check that the site's *Translation review* is on and *Review service address* isn't empty. |
-| *You are not allowed to edit the entry in this site.* | The editor lacks *Edit* permission for that site or the section's save permissions. |
-| *The entry is not available in this site.* | The section doesn't propagate the entry to that site. Enable the site in the entry's *Status* panel or change the section's propagation. |
+| *You are not allowed to edit this content in this site.* | The editor lacks *Edit* permission for that site or the section's (category group's, global set's, volume's) save permissions. |
+| *This content is not available in this site.* | The entry (asset, category) isn't saved to that site. Enable the site in its *Status* panel (or *Sites* for assets) or change the section's (volume's, category group's) propagation. |
+| An asset's alternative text isn't translated | The volume's *Alternative Text Translation Method* is *Not translatable* (Craft's default for new volumes). Change it under *Settings → Assets → Volumes*. |
+| Entries in a CKEditor field: entries of the translated site were deleted | When a CKEditor field is translated per site, each site has its own nested entries. On translation, the target site's entries are reused in the same order (same entry type); ones it no longer uses are soft-deleted (Craft removes them for good after its *Soft-deleted items* period, `softDeleteDuration`). |
 | *Supertext does not support this language pair (en → xx-YY)* | A code from `config/supertext-translation.php` that Supertext doesn't offer, or the same language as the source. Use a code from the list; the message shows the codes that were sent. |
 | *Choose the Supertext language of site … from the list* when saving | A value that isn't one of Supertext's codes was posted. Choose one from the select. |
 | *Too many requests to Supertext* | The API's per-second limit was hit repeatedly although the plugin retries. Try again shortly. |

@@ -18,7 +18,8 @@ use supertext\crafttranslation\services\Translator;
 use yii\console\ExitCode;
 
 /**
- * php craft supertext-translation/translate <entryId> --from=en --to=de,fr [--overwrite]
+ * php craft supertext-translation/translate <elementId> --from=en --to=de,fr [--overwrite]
+ *   (the id of an entry, category, global set or asset)
  * php craft supertext-translation/translate/check   API key check and a `check` version report
  */
 class TranslateController extends Controller
@@ -28,7 +29,7 @@ class TranslateController extends Controller
     /** Handle of the source site (default: the primary site). */
     public ?string $from = null;
 
-    /** Comma-separated target site handles (default: every other site of the entry). */
+    /** Comma-separated target site handles (default: every other site the element exists in). */
     public ?string $to = null;
 
     /** Replace translations that already exist. */
@@ -39,7 +40,7 @@ class TranslateController extends Controller
         return array_merge(parent::options($actionID), $actionID === 'index' ? ['from', 'to', 'overwrite'] : []);
     }
 
-    public function actionIndex(int $entryId): int
+    public function actionIndex(int $elementId): int
     {
         $sites = Craft::$app->getSites();
         $source = $this->from ? $sites->getSiteByHandle($this->from) : $sites->getPrimarySite();
@@ -49,9 +50,9 @@ class TranslateController extends Controller
             return ExitCode::USAGE;
         }
         $translator = Plugin::getInstance()->getTranslator();
-        $entry = $translator->entryInSite($entryId, $source->id);
-        if (!$entry) {
-            $this->stderr("Entry {$entryId} not found in site {$source->handle}.\n", Console::FG_RED);
+        $element = $translator->elementInSite($elementId, $source->id);
+        if (!$element) {
+            $this->stderr("No entry, category, global set or asset {$elementId} in site {$source->handle}.\n", Console::FG_RED);
 
             return ExitCode::DATAERR;
         }
@@ -68,15 +69,15 @@ class TranslateController extends Controller
                 $targets[] = $site->id;
             }
         } else {
-            foreach ($translator->describe($entry)['sites'] as $site) {
-                if (!$site['isSource']) {
+            foreach ($translator->describe($element)['sites'] as $site) {
+                if (!$site['isSource'] && $site['available']) {
                     $targets[] = $site['id'];
                 }
             }
         }
 
         $failed = false;
-        foreach ($translator->translate($entryId, $source->id, $targets, $this->overwrite) as $result) {
+        foreach ($translator->translate($elementId, $source->id, $targets, $this->overwrite) as $result) {
             $line = "{$result['site']}: {$result['status']}" . (isset($result['message']) ? " ({$result['message']})" : '');
             $failed = $failed || $result['status'] === Translator::STATUS_ERROR;
             $this->stdout($line . "\n", $result['status'] === Translator::STATUS_ERROR ? Console::FG_RED : Console::FG_GREEN);

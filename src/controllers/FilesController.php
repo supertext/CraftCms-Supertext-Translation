@@ -21,11 +21,11 @@ use yii\web\Response;
 /**
  * Export for translation / Import translation (XLIFF 1.2 and HTML files, see api/FileExchange):
  *
- *   POST actions/supertext-translation/files/export   { entryId, siteId, targetSiteIds[], format } → the file (attachment)
+ *   POST actions/supertext-translation/files/export   { elementId, siteId, targetSiteIds[], format } → the file (attachment)
  *   POST actions/supertext-translation/files/import   multipart { file, includeChanged, overwrite } → { results }
  *
- * Same permission as translating; the import also checks that the user may save each entry in its
- * target site. Uploads are only read in memory, never stored.
+ * Same permission as translating; the import also checks that the user may save each element in its
+ * target site. Uploads are only read in memory, never stored. `entryId` is still accepted for `elementId`.
  */
 class FilesController extends Controller
 {
@@ -55,7 +55,7 @@ class FilesController extends Controller
 
         try {
             $file = Plugin::getInstance()->getTranslator()->exportFile(
-                (int) $request->getRequiredBodyParam('entryId'),
+                (int) ($request->getBodyParam('elementId') ?? $request->getRequiredBodyParam('entryId')),
                 (int) $request->getRequiredBodyParam('siteId'),
                 $targets,
                 $format,

@@ -1,6 +1,6 @@
 {
   "name": "supertext/craft-supertext-translation",
-  "description": "Supertext AI translation for Craft CMS: translate entries into your other sites with one click",
+  "description": "Supertext AI translation for Craft CMS: translate entries, categories, global sets and assets into your other sites with one click",
   "type": "craft-plugin",
   "license": "MIT",
   "keywords": ["craft", "craftcms", "craft-plugin", "translation", "localization", "supertext", "ai"],

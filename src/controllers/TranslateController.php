@@ -19,8 +19,10 @@ use yii\web\Response;
 /**
  * Control panel actions:
  *
- *   GET  actions/supertext-translation/translate/info?entryId=&siteId=   sites of the entry
- *   POST actions/supertext-translation/translate/entry                    { entryId, sourceSiteId, targetSiteIds[], overwrite }
+ *   GET  actions/supertext-translation/translate/info?elementId=&siteId=  sites of the entry, category, global set or asset
+ *   POST actions/supertext-translation/translate/entry                    { elementId, sourceSiteId, targetSiteIds[], overwrite }
+ *
+ * `entryId` is still accepted for `elementId` (pages still open from an earlier version).
  *   POST actions/supertext-translation/translate/test-connection          admins: the API key check
  *   POST actions/supertext-translation/translate/send-configuration       admins: installed plugins and language mapping to Supertext
  */
@@ -44,17 +46,17 @@ class TranslateController extends Controller
     public function actionInfo(): Response
     {
         $request = Craft::$app->getRequest();
-        $entryId = (int) $request->getRequiredQueryParam('entryId');
+        $elementId = (int) ($request->getQueryParam('elementId') ?? $request->getRequiredQueryParam('entryId'));
         $siteId = (int) $request->getRequiredQueryParam('siteId');
         $translator = Plugin::getInstance()->getTranslator();
-        $entry = $translator->entryInSite($entryId, $siteId);
-        if (!$entry) {
-            return $this->asFailure(Craft::t('supertext-translation', 'The entry was not found.'));
+        $element = $translator->elementInSite($elementId, $siteId);
+        if (!$element) {
+            return $this->asFailure(Craft::t('supertext-translation', 'This content was not found.'));
         }
 
         Plugin::getInstance()->getReporting()->onRequest();
 
-        return $this->asJson($translator->describe($entry, Craft::$app->getUser()->getIdentity()) + [
+        return $this->asJson($translator->describe($element, Craft::$app->getUser()->getIdentity()) + [
             'configured' => Plugin::getInstance()->getSettings()->getApiKey() !== '',
         ]);
     }
@@ -70,7 +72,7 @@ class TranslateController extends Controller
 
         try {
             $results = Plugin::getInstance()->getTranslator()->translate(
-                (int) $request->getRequiredBodyParam('entryId'),
+                (int) ($request->getBodyParam('elementId') ?? $request->getRequiredBodyParam('entryId')),
                 (int) $request->getRequiredBodyParam('sourceSiteId'),
                 $targets,
                 (bool) $request->getBodyParam('overwrite', false),

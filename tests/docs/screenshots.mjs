@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Regenerates docs/images from a freshly set-up demo (no translations yet). In CI the plugin
+ * Regenerates docs/images from a freshly set-up demo (no translations yet): the article, the page
+ * "About us" and the global set "Footer". In CI the plugin
  * translates with the real Supertext API (secret SUPERTEXT_API_KEY), so the guides show real
  * translations; without a key it talks to stand-in.mjs (SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/).
  * Reports always go to the stand-in (SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report), never to
@@ -83,6 +84,24 @@ async function shot(page, locator, name, margin = 10) {
   await page.getByText('Translate with Supertext', { exact: true }).waitFor()
   await page.waitForTimeout(300)
   await page.screenshot({ path: OUT + '05-index-action.png', clip: { x: 226, y: 0, width: 1054, height: 720 } })
+
+  // The page "About us": translated with its box, then its German version (nested callout, table, link).
+  await go(page, '/admin/content/entries/pages?site=en')
+  const pageId = await page.locator('tr[data-id]').filter({ hasText: 'About us' }).first().getAttribute('data-id')
+  await go(page, `/admin/content/entries/pages/${pageId}?site=en`)
+  await box.locator('.st-translate').waitFor()
+  await box.locator('.st-translate').click()
+  await box.locator('.st-results li').first().waitFor({ timeout: 300_000 })
+  await page.setViewportSize({ width: 1280, height: 1100 })
+  await go(page, `/admin/content/entries/pages/${pageId}?site=de`)
+  const fields = await page.locator('#main-content, #content').first().boundingBox()
+  await page.screenshot({ path: OUT + '09-german-page.png', clip: { x: fields.x, y: 0, width: Math.min(1280 - fields.x, 1030), height: 1100 } })
+  await page.setViewportSize({ width: 1280, height: 900 })
+
+  // A global set: the box sits below its fields.
+  await go(page, '/admin/globals/footer?site=en')
+  await box.locator('.st-translate').waitFor()
+  await shot(page, page.locator('#content').first(), '10-global-set.png', 0)
 }
 
 // --- Admin: settings, sites ------------------------------------------------------------

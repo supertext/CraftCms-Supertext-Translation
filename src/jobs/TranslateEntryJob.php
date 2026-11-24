@@ -15,7 +15,10 @@ use supertext\crafttranslation\api\SupertextException;
 use supertext\crafttranslation\Plugin;
 use supertext\crafttranslation\services\Translator;
 
-/** Translates one entry into several sites (from the entry index action). */
+/**
+ * Translates one entry, category or asset into several sites (from the index action).
+ * `entryId` is the element's id; the class and property keep their names for jobs already queued.
+ */
 class TranslateEntryJob extends BaseJob
 {
     public int $entryId;
@@ -37,6 +40,6 @@ class TranslateEntryJob extends BaseJob
 
     protected function defaultDescription(): ?string
     {
-        return Craft::t('supertext-translation', 'Translating entry {id} with Supertext', ['id' => $this->entryId]);
+        return Craft::t('supertext-translation', 'Translating item {id} with Supertext', ['id' => $this->entryId]);
     }
 }

@@ -1,6 +1,6 @@
 /**
- * Supertext box on the entry edit page: lists the entry's other sites, translates the
- * current site's saved version into the chosen ones and links to the results.
+ * Supertext box on the edit page of an entry, category, global set or asset: lists its other
+ * sites, translates the current site's saved version into the chosen ones and links to the results.
  */
 (function () {
     const t = (message, params) => Craft.t('supertext-translation', message, params);
@@ -15,11 +15,11 @@
 
     async function init(box) {
         const body = box.querySelector('.supertext-body');
-        const entryId = box.dataset.entryId;
+        const elementId = box.dataset.elementId;
         const siteId = box.dataset.siteId;
         let info;
         try {
-            info = (await Craft.sendActionRequest('GET', 'supertext-translation/translate/info', { params: { entryId, siteId } })).data;
+            info = (await Craft.sendActionRequest('GET', 'supertext-translation/translate/info', { params: { elementId, siteId } })).data;
         } catch (e) {
             body.innerHTML = `<p class="error">${esc(e?.response?.data?.message ?? e)}</p>`;
             return;
@@ -31,7 +31,7 @@
         const source = info.sites.find((s) => s.isSource);
         const targets = info.sites.filter((s) => !s.isSource && s.canSave);
         if (!targets.length) {
-            body.innerHTML = `<p class="light">${esc(t('This entry exists in no other site you can edit.'))}</p>`;
+            body.innerHTML = `<p class="light">${esc(t('This content exists in no other site you can edit.'))}</p>`;
             return;
         }
 
@@ -80,7 +80,10 @@
                 <ul class="st-import-results" aria-live="polite"></ul>
             </details>`;
 
-        initFiles(body, entryId, siteId, info.sites);
+        // The box sits inside Craft's edit form: its inputs must not count as changes to the element
+        // (Craft would autosave a draft and show "unsaved changes").
+        body.querySelectorAll('input, select, textarea, button').forEach((el) => el.setAttribute('form', 'supertext-no-form'));
+        initFiles(body, elementId, siteId, info.sites);
         const boxes = [...body.querySelectorAll('.st-site input[id^="st-site-"]')];
         const warning = body.querySelector('.st-warning');
         const overwrite = body.querySelector('#st-overwrite');
@@ -109,7 +112,7 @@
             results.innerHTML = '';
             try {
                 const response = await Craft.sendActionRequest('POST', 'supertext-translation/translate/entry', {
-                    data: { entryId, sourceSiteId: source.id, targetSiteIds, overwrite: overwrite.checked },
+                    data: { elementId, sourceSiteId: source.id, targetSiteIds, overwrite: overwrite.checked },
                 });
                 results.innerHTML = response.data.results.map((r) => {
                     const site = info.sites.find((s) => s.id === r.siteId);
@@ -151,7 +154,7 @@
     }
 
     /** Export for translation / Import translation (XLIFF or HTML files). */
-    function initFiles(body, entryId, siteId, sites) {
+    function initFiles(body, elementId, siteId, sites) {
         const exportButton = body.querySelector('.st-export');
         const importButton = body.querySelector('.st-import');
         if (!exportButton || !importButton) {
@@ -160,7 +163,7 @@
         const exportError = body.querySelector('.st-export-error');
         exportButton.addEventListener('click', async () => {
             const data = new FormData();
-            data.append('entryId', entryId);
+            data.append('elementId', elementId);
             data.append('siteId', siteId);
             data.append('format', body.querySelector('input[name="st-format"]:checked').value);
             body.querySelectorAll('.st-export-site:checked').forEach((b) => data.append('targetSiteIds[]', b.value));
@@ -219,7 +222,7 @@
                     if (c.untranslated) lines.push(t('Not translated in the file: {count}', { count: c.untranslated }));
                     if (c.invalid_markup) lines.push(t('Formatting changed, not imported: {count}', { count: c.invalid_markup }));
                     if (c.missing) lines.push(t('Not in the file: {count}', { count: c.missing }));
-                    const open = site && String(r.entryId) === String(entryId) ? ` – <a href="${esc(siteUrl(site.handle))}">${esc(t('Open'))}</a>` : '';
+                    const open = site && String(r.entryId) === String(elementId) ? ` – <a href="${esc(siteUrl(site.handle))}">${esc(t('Open'))}</a>` : '';
                     return `<li class="${r.imported ? 'ok' : 'skipped'}">${head}${open}<br>${lines.map(esc).join('<br>')}</li>`;
                 }).join('');
             } catch (e) {

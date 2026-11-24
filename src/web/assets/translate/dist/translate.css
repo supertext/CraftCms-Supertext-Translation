@@ -22,3 +22,6 @@
 .supertext-body .st-import-results li { margin: 4px 0; }
 .supertext-body .st-import-results .error { color: var(--error-color, #cf1124); }
 .supertext-body .st-export-error { margin: 8px 0 0; font-size: 13px; }
+/* Global sets: the box below the fields (their edit page has no sidebar). */
+.supertext-box.supertext-below { max-width: 420px; margin: 24px 0 0; border: 1px solid var(--hairline-color, #e3e5e8); border-radius: var(--large-border-radius, 5px); background: var(--gray-050, #f3f7fc); }
+.supertext-box.supertext-below legend { padding: 10px 12px 0; }

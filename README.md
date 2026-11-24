@@ -1,17 +1,18 @@
 # Supertext Translation for Craft CMS
 
-Translate Craft CMS entries into your other sites with **Supertext AI**, right on the entry page.
+Translate Craft CMS entries, categories, global sets and assets into your other sites with **Supertext AI**, right on their edit page.
 
 ![Demo: an editor opens the English article “Swiss chocolate, shipped worldwide” in Craft CMS, translates it with the Translate with Supertext box into German and French and opens the German version](docs/images/demo.gif)
 
-Open an entry, tick the sites to translate into and click **Translate**: the title, slug, text and rich-text fields and the content of Matrix fields go to Supertext in one request per language and come back as that site's version of the entry, saved as a new revision. Editors review and adjust the translation in Craft as usual.
+Open an entry, tick the sites to translate into and click **Translate**: the title, slug, text and rich-text fields, the content of Matrix fields and of entries nested in CKEditor, table cells, link labels and SEOmatic texts go to Supertext in one request per language and come back as that site's version of the entry, saved as a new revision. Editors review and adjust the translation in Craft as usual.
 
 - Uses Craft's own multi-site: one site per language, only translatable fields are translated
 - Rich text (CKEditor) keeps its headings, bold text, links and lists; whole sentences are translated
 - Translated slugs, so translated pages get translated URLs
 - Sites with their own text are kept unless the editor explicitly overwrites them
-- Bulk translation from the entry index (in the queue)
-- *Export for translation* (XLIFF 1.2 or HTML) and *Import translation*: translate an entry outside the API, with a translator, a translation tool or Supertext's web app
+- Categories, global sets and assets (title and alternative text) too, with the same box
+- Bulk translation from the entry, category and asset indexes (in the queue)
+- *Export for translation* (XLIFF 1.2 or HTML) and *Import translation*: translate an entry (category, global set, asset) outside the API, with a translator, a translation tool or Supertext's web app
 - A Supertext language and a formal or informal tone per site (a select of Supertext's own languages, preselected with the site's language or its usual variant, e.g. `de` → `de-DE`); automatic API key check and *Test connection* in the settings
 - Optional version information for Supertext support (on by default, can be turned off)
 - Craft permissions apply; console command for scripts
@@ -20,9 +21,9 @@ Open an entry, tick the sites to translate into and click **Translate**: the tit
 
 ## Export for translation and import (XLIFF and HTML)
 
-Besides translating with Supertext AI, you can export an entry as a file, have it translated elsewhere and import the result.
+Besides translating with Supertext AI, you can export an entry (category, global set, asset) as a file, have it translated elsewhere and import the result.
 
-- **Where:** the Supertext box in the entry sidebar.
+- **Where:** the Supertext box on the edit page.
 - **Formats:** XLIFF 1.2 for translation tools such as Trados, memoQ or Phrase (formatting travels as protected tags; several target languages in one file), or HTML (one language per file) for translators or Supertext's web app, which keeps the file's head and `data-st-id` attributes, so the translated file imports as it is.
 - **Import:** the file says what it was exported from and for which language. The translations are written with the same rules as a Supertext AI translation, and a summary shows what was imported and what was skipped: source changed since the export (import those anyway with *Also import texts whose source changed since the export*), not translated, formatting changed, not in the file.
 - **Safe:** files over 10 MB, files from another system and translations that add markup the source doesn't have are refused; uploaded files aren't stored.

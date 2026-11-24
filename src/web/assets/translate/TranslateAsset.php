@@ -11,7 +11,7 @@ namespace supertext\crafttranslation\web\assets\translate;
 use craft\web\AssetBundle;
 use craft\web\assets\cp\CpAsset;
 
-/** The Supertext box on the entry edit page. */
+/** The Supertext box on the edit pages of entries, categories, global sets and assets. */
 class TranslateAsset extends AssetBundle
 {
     /** Strings the JavaScript translates with Craft.t('supertext-translation', …). */
@@ -29,7 +29,7 @@ class TranslateAsset extends AssetBundle
         'already translated, skipped',
         'Open',
         'Supertext is not set up yet: an administrator needs to add the API key in the plugin settings.',
-        'This entry exists in no other site you can edit.',
+        'This content exists in no other site you can edit.',
         'Choose at least one site.',
         'Export for translation',
         'Import translation',

@@ -5,13 +5,24 @@
 ### Added
 
 - **Send configuration to Supertext** on the settings page (below *Send version information to Supertext*, administrators only): sends Supertext the plugins installed on the site (name, version, enabled or not) and every site's language with its Supertext language, so Supertext support can help better. Only when clicked, and only while version information is on. In English, German, French and Italian. Bundled Supertext Plugin Health updated to 0.4.0.
+- **Categories, global sets and assets** are translated too: the same *Translate with Supertext* box on their edit page (for global sets below the fields), *Translate with Supertext* in the category and asset indexes, the console command and translation files. Assets: the title (when it is words, not a file name) and the alternative text.
+- **More field types:** Table fields (cells of text and row heading columns), Link fields (label, title text, ARIA label) and SEOmatic's *SEO Settings* (texts written by hand; templates and texts taken from other fields stay as they are).
+- **Entries nested in CKEditor fields** are translated. When the CKEditor field is translated per site, each site keeps its own nested entries: the target site's entries are updated in the same order, missing ones are copied from the source like Craft's *copy from site*, and ones no longer used are deleted.
+- Demo: the page *About us* (an entry nested in CKEditor, a table, a link), the category group *Topics*, the global set *Footer* and an image, with checks in CI and in the live end-to-end test, and two new screenshots in the user guide.
 
 ### Changed
 
+- The permission is now called *Translate content with Supertext* (the same permission as *Translate entries with Supertext*; nothing to change in user groups). Messages say "this content" instead of "the entry" where they are about any kind of content.
+- Translation file references can start with `category:`, `global:` or `asset:` besides `entry:`; files exported by earlier versions still import.
 - The demo runs Craft CMS 5.12.3 with Twig 3.31.1 and CKEditor 5.10.0 (was 5.12.1 with Twig 3.30.0, which has security advisories). CKEditor 5.10.0 is needed with Twig 3.31: older versions break pages that show a CKEditor field (HTTP 500).
 - The plugin's icon under *Settings → Plugins* is now the Supertext logo instead of Craft's default plug.
 - The screenshots in the guides show real Supertext translations (taken with the live API in CI instead of the stand-in's fixed texts).
 - The plugin's *Documentation* link (*Settings → Plugins*) opens the README on GitHub instead of the `docs` folder listing.
+
+### Fixed
+
+- Opening an edit page no longer makes Craft autosave a draft ("Showing your unsaved changes"): the Supertext box's own checkboxes and radio buttons counted as changes to the content.
+- A slug that isn't translatable (the same in every site) is no longer overwritten.
 
 ## 1.0.0 — 2026-11-09
 

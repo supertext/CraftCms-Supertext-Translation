@@ -60,4 +60,33 @@ sql "select es.title from elements_sites es join sites s on s.id=es.\"siteId\" j
 # A second run skips the sites that now have their own text.
 docker exec demo runuser -u www-data -- php craft supertext-translation/translate "$ENTRY" --from=en | grep > /dev/null 'skipped'
 curl -sf "http://127.0.0.1:$PORT/de/articles/schweizer-schokolade-weltweit-versandt" | grep > /dev/null 'Von Bern in die Welt'
+
+# The other content: a page with an entry nested in CKEditor, a table and a link; a category; a global set; an image.
+translate() { docker exec demo runuser -u www-data -- php craft supertext-translation/translate "$1" --from=en | tee /tmp/translate.log; test "$(grep -c ': translated' /tmp/translate.log)" = 3; }
+de="(select id from sites where handle='de')"
+PAGE=$(sql "select e.id from entries e join sections s on s.id=e.\"sectionId\" join elements el on el.id=e.id where s.handle='pages' and el.\"revisionId\" is null and el.\"draftId\" is null limit 1")
+translate "$PAGE"
+test "$(sql "select title from elements_sites where \"elementId\"=$PAGE and \"siteId\"=$de")" = "Über uns"
+page_de=$(sql "select content::text from elements_sites where \"elementId\"=$PAGE and \"siteId\"=$de")
+for text in 'Wir stellen seit drei Generationen' 'Läden in der Schweiz' 'Besuchen Sie unseren Shop' '<craft-entry data-entry-id='; do grep -qF "$text" <<< "$page_de"; done
+# The nested Callout: a German entry of its own (the field is translated per site), referenced by the German HTML.
+callout=$(sql "select e.id from entries e join elements_sites es on es.\"elementId\"=e.id join elements el on el.id=e.id where e.\"primaryOwnerId\"=$PAGE and es.\"siteId\"=$de and es.title='Kostenlose Lieferung' and el.\"dateDeleted\" is null")
+grep -qF "data-entry-id=\\\"$callout\\\"" <<< "$page_de"
+# Translating again with overwrite keeps the same German callout (no copies).
+docker exec demo runuser -u www-data -- php craft supertext-translation/translate "$PAGE" --from=en --to=de --overwrite | grep > /dev/null 'translated'
+test "$(sql "select count(*) from entries e join elements_sites es on es.\"elementId\"=e.id join elements el on el.id=e.id where e.\"primaryOwnerId\"=$PAGE and es.\"siteId\"=$de and el.\"dateDeleted\" is null and el.\"revisionId\" is null and el.\"draftId\" is null")" = 1
+grep -qF "data-entry-id=\\\"$callout\\\"" <<< "$(sql "select content::text from elements_sites where \"elementId\"=$PAGE and \"siteId\"=$de")"
+
+CATEGORY=$(sql "select id from categories limit 1")
+translate "$CATEGORY"
+test "$(sql "select title from elements_sites where \"elementId\"=$CATEGORY and \"siteId\"=$de")" = "Handgemachte Schokolade"
+FOOTER=$(sql "select id from globalsets where handle='footer'")
+translate "$FOOTER"
+footer_de=$(sql "select content::text from elements_sites where \"elementId\"=$FOOTER and \"siteId\"=$de")
+grep -qF 'Handgemacht in Bern seit 1952.' <<< "$footer_de"
+grep -qF 'Schreiben Sie uns' <<< "$footer_de"
+IMAGE=$(sql "select id from assets limit 1")
+translate "$IMAGE"
+test "$(sql "select title from elements_sites where \"elementId\"=$IMAGE and \"siteId\"=$de")" = "Pralinen auf einem Holztablett"
+test "$(sql "select alt from assets_sites where \"assetId\"=$IMAGE and \"siteId\"=$de")" = "Sechs von Hand verzierte Pralinen auf einem Holztablett"
 echo "Demo check passed"

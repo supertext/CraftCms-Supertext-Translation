@@ -7,38 +7,41 @@ How the plugin is built, how to work on it, and how it is released and deployed.
 A Craft 5 plugin (`supertext/craft-supertext-translation`, handle `supertext-translation`, namespace `supertext\crafttranslation`).
 
 ```
-Entry edit page: "Translate with Supertext" box (sidebar)          web/assets/translate/dist/translate.js
-   │ GET  actions/supertext-translation/translate/info?entryId=&siteId=
-   │ POST actions/supertext-translation/translate/entry  { entryId, sourceSiteId, targetSiteIds[], overwrite }
+Edit page of an entry, category, asset (sidebar) or global set (below the fields):
+"Translate with Supertext" box                                       web/assets/translate/dist/translate.js
+   │ GET  actions/supertext-translation/translate/info?elementId=&siteId=
+   │ POST actions/supertext-translation/translate/entry  { elementId, sourceSiteId, targetSiteIds[], overwrite }
    ▼
 controllers/TranslateController ── requires the plugin permission, the editor's own user
    ▼
 services/Translator::translate()
-   │ collectUnits(): title, slug, Plain Text / CKEditor / Redactor fields, nested Matrix entries (recursive)
+   │ collectUnits(): title, slug, alt, Plain Text / CKEditor / Redactor / Table / Link / SEOmatic fields,
+   │   entries nested in Matrix and CKEditor fields (recursive)
    │ per target site: skip if it has its own text (unless overwrite), check canSave()
    ▼
 api/SupertextClient::translateSegments()   the bundled Supertext SDK: one <div data-st-id="N"> per value,
    │   documents below 900k characters, POST file → poll status → GET translation → DELETE
    │   (HTTP through Craft::createGuzzleClient via api/CallableTransport)
    ▼
-apply(): set the values on the entry (and nested entries) in the target site, save nested entries,
-         then the entry (revision "Translated with Supertext from …"); remember() in supertext_translations
+apply(): set the values on the element (and nested entries) in the target site, save nested entries,
+         then the element (entries: revision "Translated with Supertext from …"); remember() in supertext_translations
 ```
 
 | Path | Responsibility |
 | --- | --- |
-| `src/Plugin.php` | Registers the permission `supertext-translation:translate`, the entry index action, the sidebar box (`Element::EVENT_DEFINE_SIDEBAR_HTML`), settings page, console controllers |
+| `src/Plugin.php` | Registers the permission `supertext-translation:translate`, the index action (entries, categories, assets), the sidebar box (`Element::EVENT_DEFINE_SIDEBAR_HTML` on `Entry`, `Category`, `Asset`; the template hook `cp.globals.edit.content` for global sets, whose edit page has no sidebar), settings page, console controllers |
 | `src/icon.svg` | The plugin icon Craft shows under *Settings → Plugins* and in the plugin store listing: the Supertext logo (dark green S) |
 | `src/api/` | Wrapper around the Supertext SDK (`SupertextClient`, `CallableTransport`), language codes (`Languages`), Commando Center glue (`Reporting`, `ReportTransport`), exception. No Craft dependencies (HTTP through a transport callable), unit-tested on their own |
 | `lib/supertext-sdk/` | Bundled copy of the Supertext PHP SDK, namespace `supertext\crafttranslation\sdk` (see *Supertext SDK*) |
 | `lib/supertext-plugin-health/` | Bundled copy of Supertext Plugin Health (PHP), namespace `supertext\crafttranslation\pluginhealth` (see *Supertext Plugin Health*) |
-| `src/services/Translator.php` | Field rules, "already translated" check, translation, saving |
+| `src/services/Translator.php` | Element types (`ELEMENT_TYPES`), field rules, "already translated" check, translation, saving, the target site's entries for entries nested in CKEditor |
+| `src/helpers/FieldValues.php` | Texts inside a field: Table cells, Link texts, SEOmatic texts, CKEditor chunks (other plugins' values only through their public API) |
 | `src/controllers/TranslateController.php` | Control panel actions `info`, `entry`, `test-connection` (admins: the API key check) |
 | `src/controllers/FilesController.php`, `src/api/FileExchange.php` | Export for translation / Import translation (XLIFF 1.2 and HTML files, see *Translation files*) |
 | `src/controllers/PingController.php` | Public `actions/supertext-translation/ping` for the Commando Center |
 | `src/services/Reporting.php` | Commando Center on Craft: site URL, versions, when the reporter runs, its state in the table `supertext_state` |
 | `src/elements/actions/TranslateWithSupertext.php`, `src/jobs/TranslateEntryJob.php` | Bulk translation in the queue (missing sites only) |
-| `src/console/controllers/TranslateController.php` | `php craft supertext-translation/translate <entryId> [--from=en] [--to=de,fr] [--overwrite]`, `php craft supertext-translation/translate/check` |
+| `src/console/controllers/TranslateController.php` | `php craft supertext-translation/translate <elementId> [--from=en] [--to=de,fr] [--overwrite]` (an entry, category, global set or asset), `php craft supertext-translation/translate/check` |
 | `src/models/Settings.php`, `src/templates/_settings.twig` | Settings (project config; API key as `$SUPERTEXT_API_KEY`; per site Supertext language, form of address and *Translation review* in `languages`) |
 | `src/records/TranslationRecord.php`, `src/migrations/` | Table `supertext_translations` (last Supertext translation per entry and site) and `supertext_state` (`m261014_000000_supertext_state`: the reporter's state) |
 | `src/translations/{de,fr,it}/supertext-translation.php` | German, French and Italian strings (keys are the English source strings) |
@@ -46,20 +49,27 @@ apply(): set the values on the entry (and nested entries) in the target site, sa
 
 ### Field rules
 
-`Translator::collectUnits()` and `kindOf()`:
+`Translator::collectUnits()` and `kindOf()`, for the element types in `Translator::ELEMENT_TYPES` (entries, categories, global sets, assets; `elementInSite()` loads them by id):
 
-- **Title**: if the entry type has a title field and its translation method isn't *none*.
-- **Slug** (top-level entry only): if it looks like words joined by hyphens; sent as words (`a-b-c` → `a b c`), turned back into a slug with `ElementHelper::generateSlug()` in the target site's language (so `limitAutoSlugsToAscii` applies).
-- **Plain Text** → escaped text, line breaks as `<br>`. **CKEditor / Redactor** (`craft\ckeditor\Field`, `craft\redactor\Field`) → HTML as is.
-- Only fields where `$field->getIsTranslatable($entry)` is true.
+- **Title**: if the element type has titles and `getIsTitleTranslatable()` (entries: also a title field). Asset titles only when they contain a space (file names like `IMG_1234` aren't translated).
+- **Slug** (top-level entries and categories only): if `getIsSlugTranslatable()` and it looks like words joined by hyphens; sent as words (`a-b-c` → `a b c`), turned back into a slug with `ElementHelper::generateSlug()` in the target site's language (so `limitAutoSlugsToAscii` applies).
+- **Alternative text** (assets): if the volume's `altTranslationMethod` isn't *none*.
+- **Plain Text** → escaped text, line breaks as `<br>`. **CKEditor / Redactor** (`craft\ckeditor\Field`, `craft\redactor\Field`) → HTML as is (raw content, so reference tags stay).
+- **Table** → one unit per cell of a `singleline`, `multiline` or `heading` column, path `table:<row>:<column id>`. Written back on the target's rows if it has as many as the source, else on the source's rows (other cells come along).
+- **Link** (Craft 5.3+) → the custom label, `title` and `ariaLabel`, paths `link:label` …. Written back on the target's link (its URL or element stays), else the source's.
+- **SEOmatic** (`nystudio107\seomatic\fields\SeoSettings`) → the `metaGlobalVars` texts in `FieldValues::SEO_TEXTS` whose `<name>Source` is `fromCustom` (or not set) and that contain no `{` (templates such as `{{ seomatic.helper… }}` stay), paths `seo:seoTitle` …. Written back on the target's settings, with the source's `<name>Source`.
+- Only fields where `$field->getIsTranslatable($element)` is true.
 - **Matrix** → recursively the nested entries' titles and fields (up to 5 levels). The nested entry with the same ID in the target site gets the translation, so this needs Matrix propagation that keeps nested entries in all sites (the default).
+- **CKEditor with nested entries** (`<craft-entry data-entry-id="…">`): the field's chunks (`FieldValues::chunks()`): the HTML between the entries as units with path `chunk:<index>`, and the nested entries' own units (recursive). If the field isn't translatable, the nested entries are shared by all sites and found by ID like Matrix entries. If it is (CKEditor's nested entries then belong to one site each, `PropagationMethod::None`), the units carry a `via` (owner, field, position): `Translator::nestedMap()` takes the target site's entry at the same position when it has the same entry type, else copies the source's (`Elements::duplicateElement()` with the target's site and owner, like Craft's *copy from site*), the field's HTML is rebuilt around them, and the target's entries no longer used are soft-deleted after the save.
 - Empty values are skipped; an empty translation never overwrites.
 
-Each value is one `data-st-id` element, so a whole rich-text field (all its paragraphs, bold words and links) is translated in context.
+Each value is one `data-st-id` element, so a whole rich-text field (all its paragraphs, bold words and links) is translated in context; in a CKEditor field with nested entries, each stretch of HTML between two entries is one element.
 
 **"Already translated"**: a target site has its own text when any collected value (except the slug) differs from the source site's value. Without *overwrite* such sites are skipped. In Craft a site's version starts as a copy of the source, so "same as the source" means "not translated yet".
 
-**Saving**: values are set on the target site's elements and saved with `Elements::saveElement()` (nested entries first). Saving the entry creates a revision with notes; the site's enabled status is not changed.
+**Saving**: values are set on the target site's elements and saved with `Elements::saveElement()` (nested entries first, deepest first). Saving an entry creates a revision with notes (categories, global sets and assets have no revisions); the site's enabled status is not changed.
+
+**The box and the edit form**: the box sits inside Craft's edit form, so its inputs get `form="supertext-no-form"`; otherwise Craft counts them as changes and autosaves a provisional draft.
 
 ## Translation files
 
@@ -67,21 +77,21 @@ Each value is one `data-st-id` element, so a whole rich-text field (all its para
 
 ```
 translate.js (Export / Import sections of the box)
-   │ POST actions/supertext-translation/files/export  { entryId, siteId, targetSiteIds[], format }  → file (attachment)
+   │ POST actions/supertext-translation/files/export  { elementId, siteId, targetSiteIds[], format }  → file (attachment)
    │ POST actions/supertext-translation/files/import  multipart { file, includeChanged, overwrite } → { results }
    ▼
 controllers/FilesController ── plugin permission; uploads > 10 MB refused before reading, read in memory only
    ▼
-services/Translator::exportFile() / importFile() ── Craft side: entries, sites, permissions, write-back
+services/Translator::exportFile() / importFile() ── Craft side: elements, sites, permissions, write-back
    ▼
 api/FileExchange ── no Craft classes (tests/unit/FileExchangeTest.php): reference, jobs, import statuses
 ```
 
-- **Job:** one entry from its source site into one target site. `plugin` = `CraftCms-Supertext-Translation`; `reference` = `entry:<entry id>:site-<source site id>:site-<target site id>`, e.g. `entry:5:site-1:site-3` (`FileExchange::reference()` / `parseReference()`); `sourceLanguage`/`targetLanguage` = `Settings::sourceCode()`/`targetCodeOrNull()` (the site's Supertext language, exact match, default), else the site language with `_` → `-` (an unmapped site doesn't block an export).
-- **Segments:** exactly the API translation's units (`collectUnits()`), via `Translator::fileSegments()`, keyed `<element id>.<title|slug|field handle>` (nested Matrix entries have their own element id; slugs as words, HTML only for rich-text fields).
-- **Export:** XLIFF: one job per selected site, `craft-<entry id>-<site handle>.xlf` (`craft-<entry id>.xlf` for several sites), `application/x-xliff+xml`; HTML: exactly one site, `craft-<entry id>-<site handle>.html`, `text/html; charset=utf-8`; as attachment (`Response::sendContentAsFile()`), fetched by the box and saved through a blob link. Nothing to translate → *Nothing to translate.*, no file.
-- **Import:** `FileExchange::read()` (errors `invalid_file`, `missing_metadata`, `too_large`), then per job `FileExchange::import()`: `plugin` must be this plugin (`other_system`), the reference must parse (`not_found`); `Translator` loads the entry in the source site (`not_found`), the target site and the entry in it (`no_language`), checks the permission and `canSave()` (`forbidden`) and the overwrite rule of API translations (`already_translated` when the site has its own text and *Overwrite existing translations* is off), and collects the current units. `importTranslations()` compares them: `ok` is written, `source_changed` only with *Also import texts whose source changed since the export*, `untranslated`/`invalid_markup`/`missing` never. Messages: `Messages::fileError()`.
-- **Write-back:** the imported texts are mapped back to the units' indexes and go through `apply()` (nested entries first, revision note *Translated with Supertext from …*, slug regenerated, empty texts never written) and `remember()`, as for API translations. Units without an imported text keep their value in the target site.
+- **Job:** one element from its source site into one target site. `plugin` = `CraftCms-Supertext-Translation`; `reference` = `<type>:<element id>:site-<source site id>:site-<target site id>` with type `entry`, `category`, `global` or `asset`, e.g. `entry:5:site-1:site-3` (`FileExchange::reference()` / `parseReference()`; element ids are unique across types, so the type is informative; files exported before only have `entry:`); `sourceLanguage`/`targetLanguage` = `Settings::sourceCode()`/`targetCodeOrNull()` (the site's Supertext language, exact match, default), else the site language with `_` → `-` (an unmapped site doesn't block an export).
+- **Segments:** exactly the API translation's units (`collectUnits()`), via `Translator::fileSegments()`, keyed `<element id>.<title|slug|alt|field handle>`, plus `.<path>` for texts inside a field (`.table:0:col1`, `.link:label`, `.seo:seoTitle`, `.chunk:2`); nested entries have their own element id; slugs as words, HTML only for rich-text fields and CKEditor chunks.
+- **Export:** XLIFF: one job per selected site, `craft-<element id>-<site handle>.xlf` (`craft-<element id>.xlf` for several sites), `application/x-xliff+xml`; HTML: exactly one site, `craft-<element id>-<site handle>.html`, `text/html; charset=utf-8`; as attachment (`Response::sendContentAsFile()`), fetched by the box and saved through a blob link. Nothing to translate → *Nothing to translate.*, no file.
+- **Import:** `FileExchange::read()` (errors `invalid_file`, `missing_metadata`, `too_large`), then per job `FileExchange::import()`: `plugin` must be this plugin (`other_system`), the reference must parse (`not_found`); `Translator` loads the element in the source site (`not_found`), the target site and the element in it (`no_language`), checks the permission and `canSave()` (`forbidden`) and the overwrite rule of API translations (`already_translated` when the site has its own text and *Overwrite existing translations* is off), and collects the current units. `importTranslations()` compares them: `ok` is written, `source_changed` only with *Also import texts whose source changed since the export*, `untranslated`/`invalid_markup`/`missing` never. Messages: `Messages::fileError()`.
+- **Write-back:** the imported texts are mapped back to the units' indexes and go through `apply()` (nested entries first, entries' revision note *Translated with Supertext from …*, slug regenerated, empty texts never written) and `remember()`, as for API translations. Units without an imported text keep their value in the target site.
 
 ## Supertext API protocol
 
@@ -176,15 +186,15 @@ vendor/bin/phpunit
 - `tests/unit/SupertextClientTest.php`: the SDK wrapper: protocol, codes sent as given, auth header and prefix, 429 retries, error reasons (language pair and missing tone included), the key check, clean-up, segments (plain text, HTML, blank, missing) and splitting into several documents; Translation review: a review site's upload, status, download and delete go to the review URL with the same key while other sites go directly, the key check stays direct, the User-Agent carries the version, an empty review URL (or the API's own) turns it off, `REVIEW_URL` is the setting's default and `SUPERTEXT_REVIEW_URL` wins.
 - `tests/unit/LanguagesTest.php`: the per-site setting wins, exact matches, the SDK's defaults (`de` → `de-DE`, `es-ES` → `es`, `zh-CN` → `zh-Hans`), nothing else guessed (`en-IE`, `de-LI`, `gsw` → `unsupported_language`), sources from the same setting, the politeness list.
 - `tests/unit/ReportingTest.php`: with a fake transport and in-memory storage: `installed`/`settings_saved` after a save (fields, 3 s timeout, never the key), nothing due on a plain request, `upgraded`, a 401/403 reported once, *Test connection*, the `check` report, nothing sent with reports off or without a site URL, the one-hour back-off, broken storage, ping answers, the environment variable, *Send configuration to Supertext* (plugins and language mapping in one `extensions` report, sent even within the back-off hour, nothing with reports off).
-- `tests/unit/FileExchangeTest.php`: translation files: the reference format round trip, the export uses the collector's keys and one job per site (unmapped sites with their language), HTML only for one site, nothing to export, import writes `ok` texts, `source_changed` only with the option, `untranslated`/`invalid_markup`/`missing` not written, other plugins, unknown references and the loading errors (`not_found`, `no_language`, `forbidden`, `already_translated`), files over the size limit refused.
+- `tests/unit/FileExchangeTest.php`: translation files: the reference format round trip (entries, categories, global sets, assets), keys of texts inside fields, the export uses the collector's keys and one job per site (unmapped sites with their language), HTML only for one site, nothing to export, import writes `ok` texts, `source_changed` only with the option, `untranslated`/`invalid_markup`/`missing` not written, other plugins, unknown references and the loading errors (`not_found`, `no_language`, `forbidden`, `already_translated`), files over the size limit refused.
 - `tests/unit/TranslationsTest.php`: every string passed to `Craft::t('supertext-translation', …)`, `|t('supertext-translation')` or listed in `TranslateAsset::MESSAGES` is in the German, French and Italian files (and nothing else is), with the same placeholders, tags and URLs; every `t()` in the edit-page JavaScript is in `TranslateAsset::MESSAGES`.
-- `tests/demo-check.sh` (CI): the demo image on PostgreSQL with the stand-in, started twice: demo accounts created once and never duplicated, no passwords in the log, the Editors group, `translate/check`, translation of the sample article into three sites (title, ASCII slug, rich text markup, nested Matrix entries), the skip on a second run, the German front-end page, and the Commando Center: the public ping (200 and 400) and the `installed` and `check` reports received by the stand-in (`SUPERTEXT_REPORT_URL`), with the plugin, Craft version and callback URL and never the key.
+- `tests/demo-check.sh` (CI): the demo image on PostgreSQL with the stand-in, started twice: demo accounts created once and never duplicated, no passwords in the log, the Editors group, `translate/check`, translation of the sample article into three sites (title, ASCII slug, rich text markup, nested Matrix entries), the skip on a second run, the German front-end page; the page *About us* (text around the nested callout, table cell, link label, the German callout is an entry of its own and a translation with overwrite reuses it), the category, the global set (text and link label) and the image (title and alternative text); and the Commando Center: the public ping (200 and 400) and the `installed` and `check` reports received by the stand-in (`SUPERTEXT_REPORT_URL`), with the plugin, Craft version and callback URL and never the key.
 
 CI (`.github/workflows/ci.yml`) on every push and pull request: **test** (PHP 8.2, 8.3, 8.4 and 8.5: lint and PHPUnit), **phpstan** (see *Code quality and security checks*) and **demo** (builds `demo/Dockerfile`, runs `tests/demo-check.sh`).
 
 ## Demo (Railway)
 
-The public demo is a container built from `demo/Dockerfile`: PHP 8.5 with Apache, Craft CMS 5.12 Pro with CKEditor and this plugin, sites English (`en-US`, primary), Deutsch (`de-CH`), Français (`fr-CH`) and Italiano (`it-CH`), and a sample article. It runs on Railway in the `supertext-cms-demos` project, service `CraftCMS`, region EU West (Amsterdam): <https://craftcms-production-4aa0.up.railway.app/> (control panel: `/admin`). Data lives in a `craft` database on the project's PostgreSQL service.
+The public demo is a container built from `demo/Dockerfile`: PHP 8.5 with Apache, Craft CMS 5.12 Pro with CKEditor and this plugin, sites English (`en-US`, primary), Deutsch (`de-CH`), Français (`fr-CH`) and Italiano (`it-CH`), a sample article, a page with a nested entry, a table and a link, a category, a global set and an image. It runs on Railway in the `supertext-cms-demos` project, service `CraftCMS`, region EU West (Amsterdam): <https://craftcms-production-4aa0.up.railway.app/> (control panel: `/admin`). Data lives in a `craft` database on the project's PostgreSQL service.
 
 **Deploys:** Railway builds `main` of this repository (`railway.json` points it at `demo/Dockerfile`). If a push doesn't start a deployment, check that Railway's GitHub app has access to the repository, or redeploy the service (a redeploy also picks up the latest commit).
 
@@ -198,9 +208,9 @@ The public demo is a container built from `demo/Dockerfile`: PHP 8.5 with Apache
 | `project/` | The Craft project: `composer.json`/`.lock`, `config/` (Pro edition is set by the setup; ASCII slugs), front-end `templates/` with a language switcher, and `modules/supertextdemo` with the `supertext-demo/setup` console command |
 | `.env.example` | The variables below |
 
-**Demo setup** (`php craft supertext-demo/setup`, every start, only adds what is missing): Craft Pro (user groups), the four sites, fields *Summary* (Plain Text), *Body* (CKEditor with lists), *Highlights* (Matrix with *Highlight* entries: title and text), section *Articles* (all sites), the sample article, the plugin settings (key `$SUPERTEXT_API_KEY`, URL `$SUPERTEXT_API_URL`, formal tone for German, French and Italian; the sites' languages `en-US`, `de-CH`, `fr-CH`, `it-CH` are Supertext codes, so no Supertext language needs choosing), the user group **Editors** and the demo accounts.
+**Demo setup** (`php craft supertext-demo/setup`, every start, only adds what is missing): Craft Pro (user groups), the four sites, fields *Summary* (Plain Text), *Body* (CKEditor with lists), *Highlights* (Matrix with *Highlight* entries: title and text), section *Articles* (all sites), the sample article; section *Pages* with the page *About us* (*Content*: CKEditor, translated per site, with a nested *Callout* entry; *Facts*: Table with text and number columns; *Call to action*: Link with label and title text), the category group *Topics* with the category *Handmade chocolate* (title, slug, *Summary*), the global set *Footer* (*Tagline*, *Contact link*), the volume *Images* (local filesystem `web/uploads`, saved to all sites, title and alternative text translated per site) with the picture *Pralines on a wooden tray* (drawn with GD, so the demo needs no image files); the plugin settings (key `$SUPERTEXT_API_KEY`, URL `$SUPERTEXT_API_URL`, formal tone for German, French and Italian; the sites' languages `en-US`, `de-CH`, `fr-CH`, `it-CH` are Supertext codes, so no Supertext language needs choosing), the user group **Editors** (also for the pages, categories, footer and images; added to groups created by earlier demos too) and the demo accounts.
 
-**No volume:** Railway's volume limit for the project is reached, and the demo needs none: content and project config are in PostgreSQL (Craft writes `config/project/*.yaml` from the database on start). Uploaded files would disappear with the next deploy.
+**No volume:** Railway's volume limit for the project is reached, and the demo needs none: content and project config are in PostgreSQL (Craft writes `config/project/*.yaml` from the database on start). Uploaded files disappear with the next deploy; the setup draws the sample picture again when its file is missing.
 
 **Service variables:**
 
@@ -209,7 +219,7 @@ The public demo is a container built from `demo/Dockerfile`: PHP 8.5 with Apache
 | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}`; the demo database (`CRAFT_DEMO_DB_NAME`, default `craft`) is created on that server if missing |
 | `CRAFT_SECURITY_KEY` | Random secret |
 | `DEMO_ADMIN_EMAIL`, `DEMO_ADMIN_PASSWORD` | Administrator (the e-mail address is also the username) |
-| `DEMO_EDITOR_EMAIL`, `DEMO_EDITOR_PASSWORD` | Editor for automated tests and screenshots: member of **Editors** (control panel, every site, articles incl. other authors' entries, *Translate entries with Supertext*). Craft has no built-in editor role, so the demo creates this group. |
+| `DEMO_EDITOR_EMAIL`, `DEMO_EDITOR_PASSWORD` | Editor for automated tests and screenshots: member of **Editors** (control panel, every site, articles and pages incl. other authors' entries, the category group, the global set, the volume, *Translate content with Supertext*). Craft has no built-in editor role, so the demo creates this group. |
 | `SUPERTEXT_API_KEY` | Supertext key (the plugin setting references it) |
 | `SUPERTEXT_API_URL` | Optional, e.g. a stand-in API (to try the review service, switch on *Translation review* for a site instead) |
 | `SUPERTEXT_REVIEW_URL` | Optional: another review service than Supertext's (wins over *Review service address*; empty turns review off) |
@@ -238,7 +248,7 @@ docker run --rm -p 8080:8080 \
 
 ## Docs screenshots
 
-The images in `docs/images/` are generated by `tests/docs/screenshots.mjs` (Playwright) from a freshly set-up demo (no translations yet). They show **real Supertext translations**: in CI the demo translates with the real API (secret `SUPERTEXT_API_KEY`, see *End-to-end tests*). Only without a key (forks, local runs) does the plugin talk to `tests/docs/stand-in.mjs`, which returns German, French and Italian for the sample article (`samples.json`). Version reports always go to the stand-in, never to the live Commando Center. Real translations can differ a little from run to run, so the weekly run commits new images now and then. Regenerate them whenever a screen they show changes:
+The images in `docs/images/` are generated by `tests/docs/screenshots.mjs` (Playwright) from a freshly set-up demo (no translations yet). They show **real Supertext translations**: in CI the demo translates with the real API (secret `SUPERTEXT_API_KEY`, see *End-to-end tests*). Only without a key (forks, local runs) does the plugin talk to `tests/docs/stand-in.mjs`, which returns German, French and Italian for the demo content (`samples.json`; new demo content needs entries there). Version reports always go to the stand-in, never to the live Commando Center. Real translations can differ a little from run to run, so the weekly run commits new images now and then. Regenerate them whenever a screen they show changes:
 
 ```bash
 cd tests/docs && npm install && npx playwright install chromium
@@ -248,7 +258,7 @@ BASE_URL=http://127.0.0.1:8090 DEMO_ADMIN_EMAIL=… DEMO_ADMIN_PASSWORD=… \
   DEMO_EDITOR_EMAIL=… DEMO_EDITOR_PASSWORD=… npm run screenshots
 ```
 
-`06-settings.png` and `07-settings-languages.png` still show the settings page before *Review service address* and the *Translation review* column; regenerate them with the script on the next run against a demo.
+`09-german-page.png` is the German page *About us* after translating it (nested callout, table, link); `10-global-set.png` the global set *Footer* with the box below its fields.
 
 The script shows the live API address instead of the stand-in's on the settings page, and the public demo's address (`SITE_URL`) instead of the local one under *Sites*.
 
@@ -283,7 +293,7 @@ The unit tests and `tests/demo-check.sh` use fakes and the stand-in. `.github/wo
 
 1. **Real API** (repository or organization secret `SUPERTEXT_API_KEY`; without it these steps are skipped with a warning). Version reports are off (`SUPERTEXT_VERSION_REPORTS=0`), so CI runs don't appear in the Commando Center.
    - `tests/e2e/features.mjs` asks the live `GET features` (cost-free, no plugin or SDK code) whether every pair the demo translates (`en` → `de-CH`, `fr-CH`, `it-CH`) is offered; a missing pair fails the run. Whether the plugin's own language list matches the API is the SDK's job (its own tests).
-   - `tests/e2e/live.mjs` (Playwright): the editor (`DEMO_EDITOR_*`) opens the sample article in the English site and translates it into every other site with the Supertext box on the edit page. Then the database (`elements_sites`) is checked for the article and its nested *Highlight* entries in every site: each has a row, its enabled state is unchanged (the plugin doesn't publish or unpublish), every field that has text in English (title, the article's slug, *Summary*, *Body*, the highlights' *Text*) is filled and at least 80 % of them changed (a single word can stay the same), no `data-st-id`/placeholder is left, links (with their targets), bold, italics, headings, list items and Craft reference tags are kept in the same number, the text is in the target language (common words of each language counted) and de-CH has no "ß". The translated front-end page answers at its translated slug. Translating again with *Overwrite existing translations* (the warning must appear) must update the same rows: no new entries, no new `elements_sites` rows. The Supertext box and its results must show no error. Each run translates the sample article twice into three languages (about 3,000 characters on the key's account).
+   - `tests/e2e/live.mjs` (Playwright): the editor (`DEMO_EDITOR_*`) opens the sample article in the English site and translates it into every other site with the Supertext box on the edit page. Then the database (`elements_sites`) is checked for the article and its nested *Highlight* entries in every site: each has a row, its enabled state is unchanged (the plugin doesn't publish or unpublish), every field that has text in English (title, the article's slug, *Summary*, *Body*, the highlights' *Text*) is filled and at least 80 % of them changed (a single word can stay the same), no `data-st-id`/placeholder is left, links (with their targets), bold, italics, headings, list items and Craft reference tags are kept in the same number, the text is in the target language (common words of each language counted) and de-CH has no "ß". The translated front-end page answers at its translated slug. Translating again with *Overwrite existing translations* (the warning must appear) must update the same rows: no new entries, no new `elements_sites` rows. The Supertext box and its results must show no error. Then the page *About us*, the category, the global set *Footer* and the image are translated with their boxes: every site must get changed text in its own language, and the page's nested *Callout* must be an entry of each site's own, referenced by that site's HTML and translated. Each run translates the sample article twice and the other content once into three languages (about 5,000 characters on the key's account).
 2. **Docs screenshots** (see *Docs screenshots*) with the same secret, so the guides show real Supertext translations; without it the stand-in API translates. Version reports go to the stand-in either way. If `docs/images/` changed and the screenshot step succeeded, a second job (only on `main`) commits the new images straight to `main` ("Docs: regenerate screenshots"). There is no pull request to review, and the push, made with the workflow's own token, starts no other workflow.
 
 If a run fails, the artifact `e2e-debug` has the result pages (`artifacts/*.png`), the demo containers' logs and the stand-in log. Locally:
@@ -336,8 +346,9 @@ Planned: submit the package to Packagist and the Craft Plugin Store.
 ## Known limitations / roadmap
 
 - Translation runs inside the editor's request (one site after the other, up to *Timeout* each); the index action uses the queue.
-- Supported field types: Plain Text, CKEditor, Redactor, Matrix. Not yet: Table cells, Link field labels, SEO plugin fields, entries nested inside CKEditor fields, categories, global sets and assets (alt text).
-- Matrix fields that keep separate nested entries per site ("Only save entries to the site they were created in") are not translated.
+- Supported: entries, categories, global sets, assets; Plain Text, CKEditor (with nested entries), Redactor, Matrix, Table, Link, SEOmatic. Not yet: other SEO plugins (e.g. Ether SEO, SEO Fields), Commerce products and variants, Neo and Super Table.
+- Matrix fields that keep separate nested entries per site ("Only save entries to the site they were created in") are not translated, and neither are Matrix fields inside entries nested in a CKEditor field that is translated per site (the target site's copies have other nested entries).
+- CKEditor's nested entries are matched by position and entry type: a target site whose nested entries were reordered by hand gets the source's order back.
 - Re-translating overwrites manual changes in the translated fields (with *Overwrite existing translations*). A translation memory and reviewers' corrections come from the review service when a site has *Translation review* on; corrections reach Craft only with the next translation (no push).
 - Not in the Plugin Store / on Packagist yet.
 - The language list is the SDK's (October 2026); a language Supertext adds later can be used before the SDK knows it only if the site already stores its code. A future version could read `GET features` live.

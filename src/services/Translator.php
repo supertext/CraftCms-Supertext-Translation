@@ -11,29 +11,45 @@ namespace supertext\crafttranslation\services;
 use Craft;
 use craft\base\Component;
 use craft\base\ElementInterface;
+use craft\base\Field;
 use craft\base\FieldInterface;
+use craft\elements\Asset;
+use craft\elements\Category;
 use craft\elements\Entry;
+use craft\elements\GlobalSet;
 use craft\elements\User;
+use craft\fields\data\LinkData;
+use craft\fields\Link;
 use craft\fields\Matrix;
 use craft\fields\PlainText;
+use craft\fields\Table;
 use craft\helpers\Db;
 use craft\helpers\ElementHelper;
 use craft\models\Site;
 use supertext\crafttranslation\api\FileExchange;
 use supertext\crafttranslation\api\SupertextClient;
 use supertext\crafttranslation\api\SupertextException;
+use supertext\crafttranslation\helpers\FieldValues;
 use supertext\crafttranslation\helpers\Messages;
 use supertext\crafttranslation\Plugin;
 use supertext\crafttranslation\records\TranslationRecord;
 
 /**
- * Translates an entry from one site into others.
+ * Translates an entry, category, global set or asset from one site into others.
  *
- * All translatable texts of the entry (title, slug, plain text and rich text fields, and
- * the same fields of its nested Matrix entries) go to Supertext as one HTML document per
- * target site, one `data-st-id` element per field value. The translations are written to
- * the entry in the target site and saved, which creates a revision (the previous version
- * can be restored from the entry's revisions).
+ * All translatable texts of the element go to Supertext as one HTML document per target site, one
+ * `data-st-id` element per text: title, slug (entries and categories) and alternative text
+ * (assets), plain text and rich text fields, Table text cells, Link texts, SEOmatic texts, and the
+ * same texts of nested entries (Matrix fields and entries inside CKEditor fields). The translations
+ * are written to the element in the target site and saved (for entries this creates a revision, so
+ * the previous version can be restored).
+ *
+ * Entries inside a translatable CKEditor field belong to one site each: the target site's own
+ * nested entries are reused in the same order (same entry type), the others are copied from the
+ * source like Craft's "copy from site" does, and the field's HTML is rebuilt around them.
+ *
+ * @phpstan-type Via array{owner: ElementInterface, field: string, ordinal: int}
+ * @phpstan-type Unit array{element: ElementInterface, attribute: ?string, field: ?string, path: ?string, kind: string, value: string, depth: int, via: ?Via}
  */
 class Translator extends Component
 {
@@ -41,57 +57,75 @@ class Translator extends Component
     public const STATUS_SKIPPED = 'skipped';
     public const STATUS_ERROR = 'error';
 
+    /** Element types the plugin translates. */
+    public const ELEMENT_TYPES = [Entry::class, Category::class, GlobalSet::class, Asset::class];
+
     /** Rich text field classes whose value is HTML. */
-    public const HTML_FIELDS = ['craft\\ckeditor\\Field', 'craft\\redactor\\Field'];
+    public const HTML_FIELDS = [FieldValues::CKEDITOR_FIELD, 'craft\\redactor\\Field'];
 
     /** Slugs made of words ("swiss-chocolate-shipped-worldwide") are translated as words. */
     private const SLUG = '/^[\p{Ll}\p{N}]+(?:-[\p{Ll}\p{N}]+)+$/u';
 
+    /** Nested entries are followed this deep. */
+    private const MAX_DEPTH = 5;
+
     /** @var (callable(string, string, array<string, string>, ?string, float): array{status: int, body: string, headers: array<string, string>})|null Tests only. */
     public $transport = null;
 
+    /** @var array<int, Via|null> how each collected element is reached: inside a translatable CKEditor field, or by its id */
+    private array $vias = [];
+
+    /** @var array<string, ElementInterface|null> source element id:site id => the element in that site */
+    private array $resolved = [];
+
+    /** @var array<string, array{entries: array<int, ?Entry>, displaced: list<Entry>}> owner id:field:site id => its nested entries in that site */
+    private array $nestedMaps = [];
+
     /**
-     * The entry's sites, for the Supertext box.
+     * The element's sites, for the Supertext box.
      *
-     * @return array{sourceSiteId: int, sites: list<array{id: int, handle: string, name: string, language: string, isSource: bool, translated: bool, lastTranslation: ?string, canSave: bool}>}
+     * `available`: the element exists in that site (assets and entries can be saved to some sites only).
+     *
+     * @return array{sourceSiteId: int, sites: list<array{id: int, handle: string, name: string, language: string, isSource: bool, available: bool, translated: bool, lastTranslation: ?string, canSave: bool}>}
      */
-    public function describe(Entry $entry, ?User $user = null): array
+    public function describe(ElementInterface $element, ?User $user = null): array
     {
-        $source = $this->entryInSite($entry->id, $entry->siteId);
+        $source = $this->elementInSite((int) $element->id, (int) $element->siteId);
         if (!$source) {
-            throw new SupertextException(Craft::t('supertext-translation', 'The entry was not found.'));
+            throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
         $sourceUnits = $this->collectUnits($source);
-        $last = $this->lastTranslations($entry->id);
+        $last = $this->lastTranslations((int) $source->id);
         $sites = [];
 
-        foreach ($this->supportedSites($entry) as $site) {
+        foreach ($this->supportedSites($source) as $site) {
             $isSource = $site->id === $source->siteId;
-            $target = $isSource ? $source : $this->entryInSite($entry->id, $site->id);
+            $target = $isSource ? $source : $this->elementInSite((int) $source->id, $site->id);
             $sites[] = [
                 'id' => $site->id,
                 'handle' => $site->handle,
                 'name' => $site->getName(),
                 'language' => $site->language,
                 'isSource' => $isSource,
+                'available' => $target !== null,
                 'translated' => !$isSource && $target && $this->differs($sourceUnits, $target),
                 'lastTranslation' => $last[$site->id] ?? null,
                 'canSave' => $target !== null && Craft::$app->getElements()->canSave($target, $user),
             ];
         }
 
-        return ['sourceSiteId' => $source->siteId, 'sites' => $sites];
+        return ['sourceSiteId' => (int) $source->siteId, 'sites' => $sites];
     }
 
     /**
      * @param list<int> $targetSiteIds
      * @return list<array{siteId: int, site: string, status: string, message?: string}>
      */
-    public function translate(int $entryId, int $sourceSiteId, array $targetSiteIds, bool $overwrite, ?User $user = null): array
+    public function translate(int $elementId, int $sourceSiteId, array $targetSiteIds, bool $overwrite, ?User $user = null): array
     {
-        $source = $this->entryInSite($entryId, $sourceSiteId);
+        $source = $this->elementInSite($elementId, $sourceSiteId);
         if (!$source) {
-            throw new SupertextException(Craft::t('supertext-translation', 'The entry was not found.'));
+            throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
         if ($user && !$user->can(Plugin::PERMISSION)) {
             throw new SupertextException(Craft::t('supertext-translation', 'You are not allowed to translate with Supertext.'));
@@ -118,12 +152,12 @@ class Translator extends Component
             $result = ['siteId' => $siteId, 'site' => $site?->getName() ?? (string) $siteId];
 
             try {
-                $target = $site ? $this->entryInSite($entryId, $siteId) : null;
+                $target = $site ? $this->elementInSite($elementId, $siteId) : null;
                 if (!$site || !$target) {
-                    throw new SupertextException(Craft::t('supertext-translation', 'The entry is not available in this site.'));
+                    throw new SupertextException(Craft::t('supertext-translation', 'This content is not available in this site.'));
                 }
                 if ($user && !Craft::$app->getElements()->canSave($target, $user)) {
-                    throw new SupertextException(Craft::t('supertext-translation', 'You are not allowed to edit the entry in this site.'));
+                    throw new SupertextException(Craft::t('supertext-translation', 'You are not allowed to edit this content in this site.'));
                 }
 
                 if (!$overwrite && $this->differs($units, $target)) {
@@ -140,7 +174,7 @@ class Translator extends Component
                     $settings->politeness($site->handle),
                 );
                 $this->apply($units, $translated, $siteId, $sourceSite?->getName() ?? '', $user);
-                $this->remember($entryId, $sourceSiteId, $siteId, $user);
+                $this->remember($elementId, $sourceSiteId, $siteId, $user);
                 $results[] = $result + ['status' => self::STATUS_TRANSLATED];
             } catch (\Throwable $e) {
                 if (!$e instanceof SupertextException) {
@@ -163,18 +197,18 @@ class Translator extends Component
     }
 
     /**
-     * Export for translation: the entry's texts in its current site as an XLIFF or HTML file for
+     * Export for translation: the element's texts in its current site as an XLIFF or HTML file for
      * the given target sites (see FileExchange), or null when there is nothing to translate.
      *
      * @param list<int> $targetSiteIds
      * @return array{content: string, filename: string, contentType: string}|null
      */
-    public function exportFile(int $entryId, int $sourceSiteId, array $targetSiteIds, string $format): ?array
+    public function exportFile(int $elementId, int $sourceSiteId, array $targetSiteIds, string $format): ?array
     {
-        $source = $this->entryInSite($entryId, $sourceSiteId);
+        $source = $this->elementInSite($elementId, $sourceSiteId);
         $sourceSite = Craft::$app->getSites()->getSiteById($sourceSiteId);
         if (!$source || !$sourceSite) {
-            throw new SupertextException(Craft::t('supertext-translation', 'The entry was not found.'));
+            throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
 
         $settings = Plugin::getInstance()->getSettings();
@@ -201,12 +235,12 @@ class Translator extends Component
             $sourceLanguage = FileExchange::fallbackCode($sourceSite->language);
         }
 
-        return FileExchange::export($entryId, $sourceSiteId, $sourceLanguage, $targets, $this->fileSegments($this->collectUnits($source)), $format);
+        return FileExchange::export($elementId, $sourceSiteId, $sourceLanguage, $targets, $this->fileSegments($this->collectUnits($source)), $format, self::referenceType($source));
     }
 
     /**
-     * Import translation: writes each job of an uploaded file into its entry and target site, through
-     * the same write-back as API translations (revision, nested entries, overwrite rule).
+     * Import translation: writes each job of an uploaded file into its element and target site,
+     * through the same write-back as API translations (revision, nested entries, overwrite rule).
      *
      * @return list<array{entryId: ?int, siteId: ?int, title: string, site: string, language: string, error: ?string, params: array<string, string>, counts: array<string, int>, imported: int, message?: string}>
      * @throws \supertext\crafttranslation\sdk\Files\TranslationFileError invalid_file, missing_metadata, too_large
@@ -215,14 +249,14 @@ class Translator extends Component
     {
         $results = [];
         foreach (FileExchange::read($content) as $file) {
-            $open = function (int $entryId, int $sourceSiteId, int $targetSiteId) use ($overwrite, $user): array {
-                $source = $this->entryInSite($entryId, $sourceSiteId);
+            $open = function (int $elementId, int $sourceSiteId, int $targetSiteId) use ($overwrite, $user): array {
+                $source = $this->elementInSite($elementId, $sourceSiteId);
                 if (!$source) {
                     return ['error' => FileExchange::NOT_FOUND];
                 }
                 $site = Craft::$app->getSites()->getSiteById($targetSiteId);
-                $target = $site ? $this->entryInSite($entryId, $targetSiteId) : null;
-                $info = ['title' => (string) $source->title, 'site' => $site?->getName() ?? ''];
+                $target = $site ? $this->elementInSite($elementId, $targetSiteId) : null;
+                $info = ['title' => self::label($source), 'site' => $site?->getName() ?? ''];
                 if (!$site || !$target) {
                     return $info + ['error' => FileExchange::NO_LANGUAGE];
                 }
@@ -236,7 +270,7 @@ class Translator extends Component
 
                 return $info + [
                     'segments' => $this->fileSegments($units),
-                    'write' => function (array $texts) use ($units, $entryId, $sourceSiteId, $targetSiteId, $user): void {
+                    'write' => function (array $texts) use ($units, $elementId, $sourceSiteId, $targetSiteId, $user): void {
                         $translations = [];
                         foreach ($units as $i => $unit) {
                             if (isset($texts[self::unitKey($unit)])) {
@@ -245,7 +279,7 @@ class Translator extends Component
                         }
                         $sourceSite = Craft::$app->getSites()->getSiteById($sourceSiteId);
                         $this->apply($units, $translations, $targetSiteId, $sourceSite?->getName() ?? '', $user);
-                        $this->remember($entryId, $sourceSiteId, $targetSiteId, $user);
+                        $this->remember($elementId, $sourceSiteId, $targetSiteId, $user);
                     },
                 ];
             };
@@ -269,10 +303,11 @@ class Translator extends Component
     }
 
     /**
-     * The units as segments of a translation file, keyed `<element id>.<title|slug|field handle>`
-     * (slugs as words, like the API translation sends them).
+     * The units as segments of a translation file, keyed `<element id>.<title|slug|alt|field handle>`
+     * plus `.<path>` for texts inside a field (Table cells, Link texts, SEOmatic texts, CKEditor
+     * chunks); slugs as words, like the API translation sends them.
      *
-     * @param list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}> $units
+     * @param list<Unit> $units
      * @return list<array{key: string, text: string, html: bool}>
      */
     public function fileSegments(array $units): array
@@ -289,10 +324,10 @@ class Translator extends Component
         return $segments;
     }
 
-    /** @param array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string} $unit */
+    /** @param Unit $unit */
     private static function unitKey(array $unit): string
     {
-        return $unit['element']->id . '.' . ($unit['attribute'] ?? $unit['field']);
+        return $unit['element']->id . '.' . ($unit['attribute'] ?? $unit['field']) . ($unit['path'] !== null ? '.' . $unit['path'] : '');
     }
 
     public function client(): SupertextClient
@@ -313,83 +348,171 @@ class Translator extends Component
     }
 
     /**
-     * Every translatable value of the entry (and its nested entries), in document order.
+     * Every translatable text of the element (and its nested entries), in document order.
      *
-     * @return list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}>
+     * @param Via|null $via
+     * @return list<Unit>
      */
-    public function collectUnits(Entry $entry, int $depth = 0): array
+    public function collectUnits(ElementInterface $element, int $depth = 0, ?array $via = null): array
     {
         $units = [];
-        $type = $entry->getType();
+        $this->vias[(int) $element->id] = $via;
+        $add = static function (array $unit) use (&$units, $element, $depth, $via): void {
+            $units[] = $unit + ['element' => $element, 'attribute' => null, 'field' => null, 'path' => null, 'depth' => $depth, 'via' => $via];
+        };
 
-        if ($type->hasTitleField && $type->titleTranslationMethod !== \craft\base\Field::TRANSLATION_METHOD_NONE && (string) $entry->title !== '') {
-            $units[] = ['element' => $entry, 'attribute' => 'title', 'field' => null, 'kind' => 'text', 'value' => (string) $entry->title];
+        $title = trim((string) $element->title);
+        if ($element::hasTitles() && $title !== '' && self::titleTranslatable($element)) {
+            $add(['attribute' => 'title', 'kind' => 'text', 'value' => $title]);
         }
-        if ($depth === 0 && \is_string($entry->slug) && preg_match(self::SLUG, $entry->slug)) {
-            $units[] = ['element' => $entry, 'attribute' => 'slug', 'field' => null, 'kind' => 'slug', 'value' => $entry->slug];
+        if ($depth === 0 && $element::hasUris() && \is_string($element->slug) && preg_match(self::SLUG, $element->slug) && $element->getIsSlugTranslatable()) {
+            $add(['attribute' => 'slug', 'kind' => 'slug', 'value' => $element->slug]);
+        }
+        if ($element instanceof Asset && trim((string) $element->alt) !== '' && $element->getVolume()->altTranslationMethod !== Field::TRANSLATION_METHOD_NONE) {
+            $add(['attribute' => 'alt', 'kind' => 'text', 'value' => trim((string) $element->alt)]);
         }
 
-        foreach ($entry->getFieldLayout()?->getCustomFields() ?? [] as $field) {
+        foreach ($element->getFieldLayout()?->getCustomFields() ?? [] as $field) {
             $kind = self::kindOf($field);
             if ($kind === null) {
                 continue;
             }
+            $handle = $field->handle;
             if ($kind === 'nested') {
-                if ($depth < 5) {
+                if ($depth < self::MAX_DEPTH) {
                     /** @var \craft\elements\db\EntryQuery $query */
-                    $query = $entry->getFieldValue($field->handle);
+                    $query = $element->getFieldValue($handle);
                     foreach ((clone $query)->status(null)->all() as $nested) {
                         array_push($units, ...$this->collectUnits($nested, $depth + 1));
                     }
                 }
                 continue;
             }
-            if (!$field->getIsTranslatable($entry)) {
+            $translatable = $field->getIsTranslatable($element);
+
+            // CKEditor with nested entries: the HTML between the entries, and the entries' own texts.
+            if ($kind === 'html' && is_a($field, FieldValues::CKEDITOR_FIELD)) {
+                $chunks = FieldValues::chunks($element->getFieldValue($handle));
+                if (FieldValues::hasEntries($chunks)) {
+                    $ordinal = 0;
+                    foreach ($chunks as $i => $chunk) {
+                        if ($chunk['html'] === null) {
+                            if ($chunk['entry'] && $depth < self::MAX_DEPTH) {
+                                $nestedVia = $translatable ? ['owner' => $element, 'field' => $handle, 'ordinal' => $ordinal] : null;
+                                array_push($units, ...$this->collectUnits($chunk['entry'], $depth + 1, $nestedVia));
+                            }
+                            $ordinal++;
+                        } elseif ($translatable && trim($chunk['html']) !== '') {
+                            $add(['field' => $handle, 'path' => "chunk:$i", 'kind' => 'html', 'value' => trim($chunk['html'])]);
+                        }
+                    }
+                    continue;
+                }
+            }
+            if (!$translatable) {
                 continue;
             }
-            $value = trim((string) $entry->getFieldValue($field->handle));
-            if ($value !== '') {
-                $units[] = ['element' => $entry, 'attribute' => null, 'field' => $field->handle, 'kind' => $kind, 'value' => $value];
+
+            switch ($kind) {
+                case 'table':
+                    /** @var Table $field */
+                    $columns = FieldValues::tableTextColumns($field);
+                    foreach (FieldValues::tableRows($field, $element) as $r => $row) {
+                        foreach ($columns as $column) {
+                            $text = \is_string($row[$column] ?? null) ? trim($row[$column]) : '';
+                            if ($text !== '') {
+                                $add(['field' => $handle, 'path' => "table:$r:$column", 'kind' => 'text', 'value' => $text]);
+                            }
+                        }
+                    }
+                    break;
+                case 'link':
+                    $link = $element->getFieldValue($handle);
+                    if ($link instanceof LinkData) {
+                        foreach (FieldValues::LINK_TEXTS as $name) {
+                            $text = trim(FieldValues::linkText($link, $name));
+                            if ($text !== '') {
+                                $add(['field' => $handle, 'path' => "link:$name", 'kind' => 'text', 'value' => $text]);
+                            }
+                        }
+                    }
+                    break;
+                case 'seo':
+                    $seo = FieldValues::seo($field, $element);
+                    foreach (FieldValues::SEO_TEXTS as $name) {
+                        $text = FieldValues::seoText($seo, $name);
+                        if ($text !== '') {
+                            $add(['field' => $handle, 'path' => "seo:$name", 'kind' => 'text', 'value' => $text]);
+                        }
+                    }
+                    break;
+                default:
+                    $value = trim((string) $element->getFieldValue($handle));
+                    if ($value !== '') {
+                        $add(['field' => $handle, 'kind' => $kind, 'value' => $value]);
+                    }
             }
         }
 
         return $units;
     }
 
-    /** text | html | nested | null (not translated) */
+    /** text | html | table | link | seo | nested | null (not translated) */
     public static function kindOf(FieldInterface $field): ?string
     {
-        if ($field instanceof Matrix) {
-            return 'nested';
-        }
-        if ($field instanceof PlainText) {
-            return 'text';
-        }
+        return match (true) {
+            $field instanceof Matrix => 'nested',
+            $field instanceof PlainText => 'text',
+            $field instanceof Table => 'table',
+            $field instanceof Link => 'link',
+            is_a($field, FieldValues::SEOMATIC_FIELD) => 'seo',
+            self::isHtmlField($field) => 'html',
+            default => null,
+        };
+    }
+
+    private static function isHtmlField(FieldInterface $field): bool
+    {
         foreach (self::HTML_FIELDS as $class) {
             if (is_a($field, $class)) {
-                return 'html';
+                return true;
             }
         }
 
-        return null;
+        return false;
+    }
+
+    private static function titleTranslatable(ElementInterface $element): bool
+    {
+        if ($element instanceof Entry && !$element->getType()->hasTitleField) {
+            return false;
+        }
+        // Asset titles that are file names ("IMG_1234") aren't worth translating: only titles made of words.
+        if ($element instanceof Asset && !preg_match('/\s/u', trim((string) $element->title))) {
+            return false;
+        }
+
+        return $element->getIsTitleTranslatable();
     }
 
     /**
      * Whether the target already has its own text: any translatable value differs from the source.
      *
-     * @param list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}> $units
+     * @param list<Unit> $units
      */
-    private function differs(array $units, Entry $target): bool
+    private function differs(array $units, ElementInterface $target): bool
     {
+        $this->resolved = [];
+        $this->nestedMaps = [];
         foreach ($units as $unit) {
             if ($unit['kind'] === 'slug') {
                 continue;
             }
-            $element = $this->counterpart($unit['element'], $target->siteId);
+            $element = $this->resolve($unit['element'], (int) $target->siteId, false);
             if (!$element) {
                 continue;
             }
-            $current = trim($unit['attribute'] !== null ? (string) $element->{$unit['attribute']} : (string) $element->getFieldValue($unit['field']));
+            $current = $this->currentText($element, $unit);
             if ($current !== '' && $current !== $unit['value']) {
                 return true;
             }
@@ -399,7 +522,34 @@ class Translator extends Component
     }
 
     /**
-     * @param list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}> $units
+     * The unit's text as it is now in the given element (the source's counterpart in another site).
+     *
+     * @param Unit $unit
+     */
+    private function currentText(ElementInterface $element, array $unit): string
+    {
+        if ($unit['attribute'] !== null) {
+            return trim((string) $element->{$unit['attribute']});
+        }
+        $handle = (string) $unit['field'];
+        if ($unit['path'] === null) {
+            return trim((string) $element->getFieldValue($handle));
+        }
+        $field = $element->getFieldLayout()?->getFieldByHandle($handle);
+        [$type, $a, $b] = explode(':', $unit['path'], 3) + [null, null, null];
+        $value = match (true) {
+            $type === 'table' && $field instanceof Table => FieldValues::tableRows($field, $element)[(int) $a][(string) $b] ?? '',
+            $type === 'link' => ($link = $element->getFieldValue($handle)) instanceof LinkData ? FieldValues::linkText($link, (string) $a) : '',
+            $type === 'seo' && $field !== null => FieldValues::seoText(FieldValues::seo($field, $element), (string) $a),
+            $type === 'chunk' => FieldValues::chunks($element->getFieldValue($handle))[(int) $a]['html'] ?? '',
+            default => '',
+        };
+
+        return \is_string($value) ? trim($value) : '';
+    }
+
+    /**
+     * @param list<Unit> $units
      * @return array<int, string> unit index => translation
      */
     private function translateUnits(SupertextClient $client, array $units, string $sourceLanguage, string $targetLanguage, string $politeness): array
@@ -416,48 +566,121 @@ class Translator extends Component
     }
 
     /**
-     * Writes the translations to the elements in the target site and saves them
-     * (nested entries first, then the entry itself, which creates a revision).
+     * Writes the translations to the elements in the target site and saves them (nested entries
+     * first, then their owners; for entries this creates a revision).
      *
-     * @param list<array{element: ElementInterface, attribute: ?string, field: ?string, kind: string, value: string}> $units
+     * @param list<Unit> $units
      * @param array<int, string> $translations
      */
     private function apply(array $units, array $translations, int $siteId, string $sourceName, ?User $user): void
     {
-        /** @var array<string, ElementInterface> $targets */
+        $this->resolved = [];
+        $this->nestedMaps = [];
+        /** @var array<int, ElementInterface> $sources source element id => source element */
+        $sources = [];
+        /** @var array<int, ElementInterface|null> $targets source element id => target element */
         $targets = [];
-        $order = [];
+        /** @var array<int, int> $depths */
+        $depths = [];
+        /** @var array<int, array<string, array<string, string>>> $parts source element id => field => path => text */
+        $parts = [];
+        /** @var array<string, array{0: ElementInterface, 1: string}> $containers CKEditor fields with nested entries to rebuild */
+        $containers = [];
 
         foreach ($units as $i => $unit) {
+            $source = $unit['element'];
+            $id = (int) $source->id;
+            if ($unit['via'] !== null) {
+                $owner = $unit['via']['owner'];
+                $containers[$owner->id . ':' . $unit['via']['field']] = [$owner, $unit['via']['field']];
+            }
+            if ($unit['path'] !== null && str_starts_with($unit['path'], 'chunk:')) {
+                $containers[$id . ':' . $unit['field']] = [$source, (string) $unit['field']];
+            }
             $text = trim($translations[$i] ?? '');
             if ($text === '') {
                 continue;
             }
-            $key = $unit['element']->id . ':' . $siteId;
-            $targets[$key] ??= $this->counterpart($unit['element'], $siteId);
-            $element = $targets[$key];
+            $sources[$id] = $source;
+            $depths[$id] = $unit['depth'];
+            if (!\array_key_exists($id, $targets)) {
+                $targets[$id] = $this->resolve($source, $siteId, true);
+            }
+            $element = $targets[$id];
             if (!$element) {
                 continue;
             }
-            $order[$key] = $unit['element'] instanceof Entry && $unit['element']->getPrimaryOwnerId() ? 0 : 1;
 
-            if ($unit['kind'] === 'slug') {
+            if ($unit['path'] !== null) {
+                $parts[$id][(string) $unit['field']][$unit['path']] = $text;
+            } elseif ($unit['kind'] === 'slug') {
                 $element->slug = ElementHelper::generateSlug($text, null, Craft::$app->getSites()->getSiteById($siteId)?->language);
             } elseif ($unit['attribute'] !== null) {
                 $element->{$unit['attribute']} = $text;
             } else {
-                $element->setFieldValue($unit['field'], $text);
+                $element->setFieldValue((string) $unit['field'], $text);
             }
         }
 
-        // Nested entries before their owner, so the owner's revision includes them.
-        uksort($targets, static fn($a, $b) => ($order[$a] ?? 1) <=> ($order[$b] ?? 1));
-
-        foreach ($targets as $element) {
+        // Texts inside a field: Table cells, Link texts, SEOmatic texts.
+        foreach ($parts as $id => $fields) {
+            $element = $targets[$id] ?? null;
             if (!$element) {
                 continue;
             }
-            if ($element instanceof Entry && !$element->getPrimaryOwnerId()) {
+            foreach ($fields as $handle => $texts) {
+                $field = $sources[$id]->getFieldLayout()?->getFieldByHandle($handle);
+                $value = match (true) {
+                    $field instanceof Table => FieldValues::composeTable($field, $sources[$id], $element, $texts),
+                    $field instanceof Link => FieldValues::composeLink($field, $sources[$id], $element, $texts),
+                    $field !== null && is_a($field, FieldValues::SEOMATIC_FIELD) => FieldValues::composeSeo($field, $sources[$id], $element, $texts),
+                    default => false,
+                };
+                if ($value !== false && $value !== null) {
+                    $element->setFieldValue($handle, $value);
+                }
+            }
+        }
+
+        // CKEditor fields with nested entries: the translated HTML around the target site's entries.
+        /** @var list<Entry> $displaced */
+        $displaced = [];
+        foreach ($containers as [$owner, $handle]) {
+            $id = (int) $owner->id;
+            if (!\array_key_exists($id, $targets)) {
+                $targets[$id] = $this->resolve($owner, $siteId, true);
+                $sources[$id] = $owner;
+            }
+            $element = $targets[$id];
+            if (!$element) {
+                continue;
+            }
+            $depths[$id] ??= $this->depthOf($owner, $units);
+            $map = $this->nestedMap($owner, $handle, $siteId, true);
+            $html = '';
+            $ordinal = 0;
+            foreach (FieldValues::chunks($owner->getFieldValue($handle)) as $i => $chunk) {
+                if ($chunk['html'] === null) {
+                    $entry = $map['entries'][$ordinal++] ?? null;
+                    $html .= $entry ? FieldValues::entryTag((int) $entry->id) : '';
+                } else {
+                    $html .= $parts[$id][$handle]["chunk:$i"] ?? $chunk['html'];
+                }
+            }
+            $element->setFieldValue($handle, $html);
+            array_push($displaced, ...$map['displaced']);
+        }
+
+        // Nested entries before their owners, so an owner's revision includes them.
+        $ids = array_keys(array_filter($targets));
+        usort($ids, static fn(int $a, int $b) => ($depths[$b] ?? 0) <=> ($depths[$a] ?? 0));
+
+        foreach ($ids as $id) {
+            $element = $targets[$id];
+            if (!$element) {
+                continue;
+            }
+            if ($element instanceof Entry && ($depths[$id] ?? 0) === 0) {
                 $element->setRevisionNotes(Craft::t('supertext-translation', 'Translated with Supertext from {site}', ['site' => $sourceName]));
                 if ($user) {
                     $element->revisionCreatorId = $user->id;
@@ -468,26 +691,132 @@ class Translator extends Component
                 throw new SupertextException(Craft::t('supertext-translation', 'The translation could not be saved: {errors}', ['errors' => $errors]));
             }
         }
+
+        // The target site's nested entries that the new HTML no longer contains (to the trash, restorable).
+        foreach ($displaced as $entry) {
+            Craft::$app->getElements()->deleteElement($entry);
+        }
     }
 
-    private function counterpart(ElementInterface $element, int $siteId): ?ElementInterface
+    /** @param list<Unit> $units */
+    private function depthOf(ElementInterface $element, array $units): int
     {
-        if ($element->siteId === $siteId) {
-            return $element;
+        foreach ($units as $unit) {
+            if ($unit['element']->id === $element->id) {
+                return $unit['depth'];
+            }
+            if ($unit['via'] !== null && $unit['via']['owner']->id === $element->id) {
+                return max(0, $unit['depth'] - 1);
+            }
         }
 
-        return $this->entryInSite($element->id, $siteId);
+        return 0;
     }
 
-    public function entryInSite(int $id, int $siteId): ?Entry
+    /**
+     * The source element in the target site: the same element (its id) in that site, or, for an
+     * entry inside a translatable CKEditor field, the target site's own entry at the same place
+     * (copied from the source when `$create` and there is none of the same type).
+     */
+    private function resolve(ElementInterface $source, int $siteId, bool $create): ?ElementInterface
     {
-        return Entry::find()->id($id)->siteId($siteId)->status(null)->drafts(null)->provisionalDrafts(null)->one();
+        if ((int) $source->siteId === $siteId) {
+            return $source;
+        }
+        $key = $source->id . ':' . $siteId;
+        if (\array_key_exists($key, $this->resolved)) {
+            return $this->resolved[$key];
+        }
+        $via = $this->vias[(int) $source->id] ?? null;
+        $this->resolved[$key] = $via === null
+            ? $this->elementInSite((int) $source->id, $siteId)
+            : ($this->nestedMap($via['owner'], $via['field'], $siteId, $create)['entries'][$via['ordinal']] ?? null);
+
+        return $this->resolved[$key];
+    }
+
+    /**
+     * The target site's entries for the nested entries of a translatable CKEditor field, by position:
+     * the target's own entry when it has the same entry type, else (`$create`) a copy of the source's.
+     * `displaced`: the target's entries that are no longer used.
+     *
+     * @return array{entries: array<int, ?Entry>, displaced: list<Entry>}
+     */
+    private function nestedMap(ElementInterface $owner, string $handle, int $siteId, bool $create): array
+    {
+        $key = $owner->id . ':' . $handle . ':' . $siteId;
+        if (isset($this->nestedMaps[$key])) {
+            return $this->nestedMaps[$key];
+        }
+        $targetOwner = $this->resolve($owner, $siteId, $create);
+        $sourceEntries = array_values(array_map(static fn(array $c) => $c['entry'], array_filter(FieldValues::chunks($owner->getFieldValue($handle)), static fn(array $c) => $c['html'] === null)));
+        $targetEntries = $targetOwner ? array_values(array_filter(array_map(static fn(array $c) => $c['entry'], FieldValues::chunks($targetOwner->getFieldValue($handle))))) : [];
+
+        $entries = [];
+        $used = [];
+        foreach ($sourceEntries as $k => $sourceEntry) {
+            $candidate = $targetEntries[$k] ?? null;
+            if ($candidate && $sourceEntry && $candidate->typeId === $sourceEntry->typeId) {
+                $entries[$k] = $candidate;
+                $used[$candidate->id] = true;
+            } elseif ($create && $sourceEntry && $targetOwner) {
+                // Like Craft's "copy from site": a copy of the source's entry that belongs to the target site.
+                $copy = Craft::$app->getElements()->duplicateElement($sourceEntry, [
+                    'siteId' => $siteId,
+                    'ownerId' => $targetOwner->id,
+                    'primaryOwnerId' => $targetOwner->id,
+                ]);
+                $entries[$k] = $copy;
+            } else {
+                $entries[$k] = null;
+            }
+        }
+        $displaced = array_values(array_filter($targetEntries, static fn(Entry $e) => !isset($used[$e->id])));
+
+        return $this->nestedMaps[$key] = ['entries' => $entries, 'displaced' => $create ? $displaced : []];
+    }
+
+    /** The element in the given site (any status; entries also as drafts), if the plugin translates its type. */
+    public function elementInSite(int $id, int $siteId): ?ElementInterface
+    {
+        $type = Craft::$app->getElements()->getElementTypeById($id);
+        if ($type === null || !\in_array($type, self::ELEMENT_TYPES, true)) {
+            return null;
+        }
+        $query = $type::find()->id($id)->siteId($siteId)->status(null);
+        if ($query instanceof \craft\elements\db\EntryQuery) {
+            $query->drafts(null)->provisionalDrafts(null);
+        }
+        $element = $query->one();
+
+        return $element instanceof ElementInterface ? $element : null;
+    }
+
+    /** `entry`, `category`, `global` or `asset`: the element type in translation file references. */
+    public static function referenceType(ElementInterface $element): string
+    {
+        return match (true) {
+            $element instanceof Category => 'category',
+            $element instanceof GlobalSet => 'global',
+            $element instanceof Asset => 'asset',
+            default => 'entry',
+        };
+    }
+
+    /** What editors see as the element's name: its title, or a global set's name. */
+    public static function label(ElementInterface $element): string
+    {
+        if ($element instanceof GlobalSet) {
+            return (string) $element->name;
+        }
+
+        return (string) $element->title;
     }
 
     /** @return list<Site> */
-    private function supportedSites(Entry $entry): array
+    private function supportedSites(ElementInterface $element): array
     {
-        $ids = array_map(static fn($s) => \is_array($s) ? (int) $s['siteId'] : (int) $s, $entry->getSupportedSites());
+        $ids = array_map(static fn($s) => \is_array($s) ? (int) $s['siteId'] : (int) $s, $element->getSupportedSites());
         $sites = [];
         foreach (Craft::$app->getSites()->getAllSites() as $site) {
             if (\in_array($site->id, $ids, true)) {

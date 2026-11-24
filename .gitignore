@@ -14,3 +14,5 @@ node_modules/
 /tests/e2e/node_modules/
 /tests/e2e/artifacts/
 /tests/docs/stand-in.log
+/demo/project/web/uploads/
+/demo/project/config/license.key
