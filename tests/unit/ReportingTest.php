@@ -142,6 +142,36 @@ final class ReportingTest extends TestCase
         self::assertSame('check', $this->reporting()->reportCheck()?->event);
     }
 
+    public function testSendConfigurationSendsThePluginsAndTheLanguageMapping(): void
+    {
+        $this->reporting()->afterSettingsSaved(self::KEY);
+        $this->center = 503;
+        $this->reporting()->onRequest(self::KEY);
+        $this->center = 202;
+        $this->calls = [];
+
+        $result = $this->reporting()->sendConfiguration(
+            [['name' => 'Supertext Translation', 'version' => '1.0.0', 'active' => true, 'type' => 'plugin'], ['name' => 'SEOmatic', 'version' => '5.1.0', 'active' => false, 'type' => 'plugin']],
+            [['code' => 'en-US', 'supertext' => 'en-US'], ['code' => 'de-CH', 'supertext' => 'de-CH'], ['code' => 'en-IE', 'supertext' => null]],
+        );
+
+        self::assertSame('extensions', $result?->event);
+        self::assertTrue($result?->sent, 'sent right away, even within the hour after a failed report');
+        [$report] = $this->reports();
+        self::assertSame('extensions', $report['event']);
+        self::assertSame(['name' => 'SEOmatic', 'version' => '5.1.0', 'active' => false, 'type' => 'plugin'], $report['extensions'][1]);
+        self::assertSame([['code' => 'en-US', 'supertext' => 'en-US'], ['code' => 'de-CH', 'supertext' => 'de-CH'], ['code' => 'en-IE', 'supertext' => null]], $report['languages']);
+        self::assertArrayNotHasKey('languages', $this->reporting()->reporter()->buildReport('check', $this->reporting()->state()), 'other reports carry no mapping');
+    }
+
+    public function testSendConfigurationSendsNothingWithReportsOff(): void
+    {
+        $result = $this->reporting(enabled: false)->sendConfiguration([['name' => 'SEOmatic']], [['code' => 'de-CH', 'supertext' => 'de-CH']]);
+
+        self::assertFalse((bool) $result?->sent);
+        self::assertSame([], $this->reports());
+    }
+
     public function testNothingIsSentWithReportsOff(): void
     {
         $result = $this->reporting(enabled: false)->afterSettingsSaved(self::KEY);
@@ -217,6 +247,11 @@ final class ReportingTest extends TestCase
 
         self::assertNull($reporting->onRequest(self::KEY)?->event, 'no new installed report after the update');
         self::assertSame([], $this->calls);
-        self::assertSame($before, $this->stored, 'stored in the same format');
+        // Plugin Health 0.2+ adds keyChecks and reportedKeyStatuses (null with one key); everything else is unchanged.
+        self::assertSame(
+            json_decode($before, true) + ['keyChecks' => null, 'reportedKeyStatuses' => null],
+            json_decode((string) $this->stored, true),
+            'stored in the same format',
+        );
     }
 }

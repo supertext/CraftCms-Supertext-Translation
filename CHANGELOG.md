@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- **Send configuration to Supertext** on the settings page (below *Send version information to Supertext*, administrators only): sends Supertext the plugins installed on the site (name, version, enabled or not) and every site's language with its Supertext language, so Supertext support can help better. Only when clicked, and only while version information is on. In English, German, French and Italian. Bundled Supertext Plugin Health updated to 0.4.0.
+
 ### Changed
 
 - The plugin's icon under *Settings → Plugins* is now the Supertext logo instead of Craft's default plug.

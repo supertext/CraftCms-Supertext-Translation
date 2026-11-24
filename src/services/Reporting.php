@@ -14,6 +14,7 @@ use craft\db\Query;
 use craft\helpers\Db;
 use supertext\crafttranslation\api\Reporting as ApiReporting;
 use supertext\crafttranslation\Plugin;
+use supertext\crafttranslation\pluginhealth\InstallationReporter;
 use supertext\crafttranslation\pluginhealth\KeyCheck;
 use supertext\crafttranslation\pluginhealth\ReporterResult;
 use yii\web\Response as YiiResponse;
@@ -26,6 +27,7 @@ use yii\web\Response as YiiResponse;
  * - onRequest() / authenticationFailed(): translate actions, the Supertext box, the settings page,
  *   queue jobs and console commands. On web requests they run after the response was sent.
  * - testConnection(): the settings page's *Test connection*; check(): `translate/check`.
+ * - sendConfiguration(): the settings page's *Send configuration to Supertext* (installed plugins and language mapping).
  *
  * Nothing here throws into a request (api/Reporting catches everything).
  */
@@ -95,6 +97,61 @@ class Reporting extends Component
         $check = $result->check ?? self::failedCheck();
 
         return ['check' => $check, 'event' => $result?->event, 'sent' => (bool) $result?->sent];
+    }
+
+    /**
+     * *Send configuration to Supertext*: the installed plugins and every site's Supertext language, now.
+     *
+     * @return array{enabled: bool, sent: bool, plugins: int, languages: int}
+     */
+    public function sendConfiguration(): array
+    {
+        $plugins = InstallationReporter::normalizeExtensions(self::installedPlugins());
+        $languages = InstallationReporter::normalizeLanguages(self::languageMapping());
+        $enabled = $this->enabled();
+        $result = $enabled ? $this->reporting()->sendConfiguration($plugins, $languages) : null;
+
+        return ['enabled' => $enabled, 'sent' => (bool) $result?->sent, 'plugins' => \count($plugins), 'languages' => \count($languages)];
+    }
+
+    /**
+     * Every installed plugin (enabled or not), this one included. Name and version only: no settings, no licence keys.
+     *
+     * @return list<array{name: string, version: string, active: bool, type: string}>
+     */
+    public static function installedPlugins(): array
+    {
+        $list = [];
+        foreach (Craft::$app->getPlugins()->getAllPluginInfo() as $info) {
+            if (empty($info['isInstalled'])) {
+                continue;
+            }
+            $list[] = [
+                'name' => (string) ($info['name'] ?? ''),
+                'version' => (string) ($info['version'] ?? ''),
+                'active' => (bool) ($info['isEnabled'] ?? false),
+                'type' => 'plugin',
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * Every site's language with the Supertext code the plugin translates into (its Supertext language, else
+     * the SDK's default for the site's language; null when neither applies).
+     *
+     * @return list<array{code: string, supertext: ?string}>
+     */
+    public static function languageMapping(): array
+    {
+        $settings = Plugin::getInstance()->getSettings();
+        $list = [];
+        foreach (Craft::$app->getSites()->getAllSites() as $site) {
+            $list[] = ['code' => (string) $site->language, 'supertext' => $settings->targetCodeOrNull($site->handle, (string) $site->language)];
+        }
+
+        return $list;
     }
 
     public function lastCheck(): ?KeyCheck

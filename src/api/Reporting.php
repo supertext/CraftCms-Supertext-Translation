@@ -123,6 +123,18 @@ final class Reporting
         return $this->run(static fn (InstallationReporter $r, ReporterState $s) => $r->reportCheck($s));
     }
 
+    /**
+     * The settings page's *Send configuration to Supertext*: the installed plugins and the language mapping
+     * in one `extensions` report, now (also after a recent failure), but only while reports are on.
+     *
+     * @param list<array{name: string, version?: string, active?: bool, type?: string}> $extensions
+     * @param list<array{code: string, supertext: ?string}>                            $languages
+     */
+    public function sendConfiguration(array $extensions, array $languages): ?ReporterResult
+    {
+        return $this->run(fn (InstallationReporter $r, ReporterState $s) => $this->reporter(static fn (): array => $languages)->sendExtensions($s, $extensions));
+    }
+
     /** The stored state (empty if none or unreadable). */
     public function state(): ReporterState
     {
@@ -139,7 +151,8 @@ final class Reporting
         return $this->state()->keyCheck;
     }
 
-    public function reporter(): InstallationReporter
+    /** @param (callable(): iterable<mixed>)|null $languages the language mapping every report of this reporter carries */
+    public function reporter(?callable $languages = null): InstallationReporter
     {
         return new InstallationReporter(
             enabled: $this->enabled && $this->siteUrl !== null,
@@ -154,6 +167,7 @@ final class Reporting
             reportUrl: $this->reportUrl,
             transport: new ReportTransport($this->transport),
             now: $this->now,
+            languages: $languages,
         );
     }
 

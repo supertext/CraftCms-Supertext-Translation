@@ -125,4 +125,9 @@ return [
     'This site already has its own text. Tick “Overwrite existing translations” to replace it.' => 'Ce site a déjà son propre texte. Cochez « Écraser les traductions existantes » pour le remplacer.',
     'Nothing to translate.' => 'Rien à traduire.',
     'An HTML file holds exactly one language. Choose one site or XLIFF.' => 'Un fichier HTML contient exactement une langue. Choisissez un seul site ou XLIFF.',
+    'Send configuration to Supertext' => 'Envoyer la configuration à Supertext',
+    'Sends Supertext the plugins installed on this site (name, version, active or not) and its Supertext language mappings, so Supertext support can help better. Nothing else is sent.' => 'Envoie à Supertext les plugins installés sur ce site (nom, version, actif ou non) et ses correspondances de langues Supertext, afin que le support Supertext puisse mieux vous aider. Rien d\'autre n\'est transmis.',
+    'Sent: {plugins} plugins, {languages} languages.' => 'Envoyé : {plugins} plugins, {languages} langues.',
+    'The configuration couldn\'t be sent. Try again later.' => 'La configuration n\'a pas pu être envoyée. Réessayez plus tard.',
+    'Turn on “Send version information to Supertext” to send the configuration.' => 'Activez « Envoyer les informations de version à Supertext » pour envoyer la configuration.',
 ];

@@ -172,6 +172,14 @@
     <p class="light">{{ 'Supertext checks that the site is reachable at:'|t('supertext-translation') }} <code>{{ pingUrl }}</code></p>
 {% endif %}
 
+<div class="field" data-supertext-config>
+    <div class="flex">
+        <button type="button" class="btn" data-supertext-config-button>{{ 'Send configuration to Supertext'|t('supertext-translation') }}</button>
+    </div>
+    <div class="instructions"><p>{{ 'Sends Supertext the plugins installed on this site (name, version, active or not) and its Supertext language mappings, so Supertext support can help better. Nothing else is sent.'|t('supertext-translation') }}</p></div>
+    <p data-supertext-config-result aria-live="polite" hidden></p>
+</div>
+
 {% js %}
 (function () {
     // Form of address only where the chosen Supertext language offers it.
@@ -209,6 +217,23 @@
             result.textContent = e?.response?.data?.message ?? String(e);
         } finally {
             button.classList.remove('loading');
+        }
+    });
+
+    const configButton = document.querySelector('[data-supertext-config-button]');
+    const configResult = document.querySelector('[data-supertext-config-result]');
+    configButton.addEventListener('click', async () => {
+        configButton.classList.add('loading');
+        try {
+            const response = await Craft.sendActionRequest('POST', 'supertext-translation/translate/send-configuration');
+            configResult.className = response.data.ok ? 'success' : 'error';
+            configResult.textContent = (response.data.ok ? '✓ ' : '') + response.data.message;
+        } catch (e) {
+            configResult.className = 'error';
+            configResult.textContent = e?.response?.data?.message ?? String(e);
+        } finally {
+            configResult.hidden = false;
+            configButton.classList.remove('loading');
         }
     });
 })();

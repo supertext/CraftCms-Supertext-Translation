@@ -22,6 +22,7 @@ use yii\web\Response;
  *   GET  actions/supertext-translation/translate/info?entryId=&siteId=   sites of the entry
  *   POST actions/supertext-translation/translate/entry                    { entryId, sourceSiteId, targetSiteIds[], overwrite }
  *   POST actions/supertext-translation/translate/test-connection          admins: the API key check
+ *   POST actions/supertext-translation/translate/send-configuration       admins: installed plugins and language mapping to Supertext
  */
 class TranslateController extends Controller
 {
@@ -31,7 +32,7 @@ class TranslateController extends Controller
             return false;
         }
         $this->requireCpRequest();
-        if ($action->id === 'test-connection') {
+        if ($action->id === 'test-connection' || $action->id === 'send-configuration') {
             $this->requireAdmin(false);
         } else {
             $this->requirePermission(Plugin::PERMISSION);
@@ -94,5 +95,24 @@ class TranslateController extends Controller
             'message' => Messages::keyCheck($check),
             'checkedAt' => $check->checkedAt,
         ]);
+    }
+
+    /** *Send configuration to Supertext*: { ok, message } (the installed plugins and the language mapping, only while reports are on). */
+    public function actionSendConfiguration(): Response
+    {
+        $this->requirePostRequest();
+        $result = Plugin::getInstance()->getReporting()->sendConfiguration();
+        if (!$result['enabled']) {
+            $message = Craft::t('supertext-translation', 'Turn on “Send version information to Supertext” to send the configuration.');
+        } elseif (!$result['sent']) {
+            $message = Craft::t('supertext-translation', 'The configuration couldn\'t be sent. Try again later.');
+        } else {
+            $message = Craft::t('supertext-translation', 'Sent: {plugins} plugins, {languages} languages.', [
+                'plugins' => $result['plugins'],
+                'languages' => $result['languages'],
+            ]);
+        }
+
+        return $this->asJson(['ok' => $result['sent'], 'message' => $message]);
     }
 }
