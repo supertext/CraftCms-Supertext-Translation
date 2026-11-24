@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- The demo runs Craft CMS 5.12.3 with Twig 3.31.1 (was 5.12.1 with Twig 3.30.0, which has security advisories).
 ### Added
 
 - **Send configuration to Supertext** on the settings page (below *Send version information to Supertext*, administrators only): sends Supertext the plugins installed on the site (name, version, enabled or not) and every site's language with its Supertext language, so Supertext support can help better. Only when clicked, and only while version information is on. In English, German, French and Italian. Bundled Supertext Plugin Health updated to 0.4.0.
