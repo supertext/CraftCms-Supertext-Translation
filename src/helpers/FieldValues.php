@@ -25,7 +25,6 @@ final class FieldValues
 {
     public const CKEDITOR_FIELD = 'craft\\ckeditor\\Field';
     public const SEOMATIC_FIELD = 'nystudio107\\seomatic\\fields\\SeoSettings';
-    private const CKEDITOR_ENTRY_CHUNK = 'craft\\ckeditor\\data\\Entry';
 
     /** Table column types whose cells are text (single line, multi-line, row heading). */
     public const TABLE_TEXT_COLUMNS = ['singleline', 'multiline', 'heading'];
@@ -53,7 +52,8 @@ final class FieldValues
         }
         $chunks = [];
         foreach ($value->getChunks(false) as $chunk) {
-            if (is_a($chunk, self::CKEDITOR_ENTRY_CHUNK)) {
+            // CKEditor's chunks: `craft\ckeditor\data\Entry` (type `entry`) and `…\Markup` (type `markup`).
+            if ($chunk->getType() === 'entry') {
                 $entry = $chunk->getEntry();
                 $chunks[] = ['html' => null, 'entry' => $entry instanceof Entry ? $entry : null];
             } else {
