@@ -8,7 +8,7 @@
 
 ### Changed
 
-- The demo runs Craft CMS 5.12.3 with Twig 3.31.1 (was 5.12.1 with Twig 3.30.0, which has security advisories).
+- The demo runs Craft CMS 5.12.3 with Twig 3.31.1 and CKEditor 5.10.0 (was 5.12.1 with Twig 3.30.0, which has security advisories). CKEditor 5.10.0 is needed with Twig 3.31: older versions break pages that show a CKEditor field (HTTP 500).
 - The plugin's icon under *Settings → Plugins* is now the Supertext logo instead of Craft's default plug.
 - The screenshots in the guides show real Supertext translations (taken with the live API in CI instead of the stand-in's fixed texts).
 - The plugin's *Documentation* link (*Settings → Plugins*) opens the README on GitHub instead of the `docs` folder listing.
