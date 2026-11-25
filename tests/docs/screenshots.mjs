@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Regenerates docs/images from a freshly set-up demo (no translations yet): the article, the page
- * "About us" and the global set "Footer". In CI the plugin
+ * "About us", the global set "Footer", the category and the image. In CI the plugin
  * translates with the real Supertext API (secret SUPERTEXT_API_KEY), so the guides show real
  * translations; without a key it talks to stand-in.mjs (SUPERTEXT_API_URL=http://127.0.0.1:8765/v1/).
  * Reports always go to the stand-in (SUPERTEXT_REPORT_URL=http://127.0.0.1:8765/report), never to
@@ -102,6 +102,22 @@ async function shot(page, locator, name, margin = 10) {
   await go(page, '/admin/globals/footer?site=en')
   await box.locator('.st-translate').waitFor()
   await shot(page, page.locator('#content').first(), '10-global-set.png', 0)
+
+  // A category and an image: translated with their box, then their German versions.
+  for (const [index, row, edit, name] of [
+    ['/admin/categories/topics?site=en', 'Handmade', '/admin/categories/topics/', '11-german-category.png'],
+    ['/admin/assets/images?site=en', 'Pralines', '/admin/assets/edit/', '12-german-image.png'],
+  ]) {
+    await go(page, index)
+    const itemId = await page.locator('tr[data-id]').filter({ hasText: row }).first().getAttribute('data-id')
+    await go(page, `${edit}${itemId}?site=en`)
+    await box.locator('.st-translate').waitFor()
+    await box.locator('.st-translate').click()
+    await box.locator('.st-results li').first().waitFor({ timeout: 300_000 })
+    await go(page, `${edit}${itemId}?site=de`)
+    const area = await page.locator('#main-content, #content').first().boundingBox()
+    await page.screenshot({ path: OUT + name, clip: { x: area.x, y: 0, width: Math.min(1280 - area.x, 1030), height: 760 } })
+  }
 }
 
 // --- Admin: settings, sites ------------------------------------------------------------

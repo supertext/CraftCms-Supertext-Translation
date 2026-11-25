@@ -27,6 +27,12 @@ Categories and images (assets) have the same **Translate with Supertext** box in
 
 ![A global set (Footer) with its Tagline and Contact link fields, and the Translate with Supertext box below them](images/10-global-set.png)
 
+The German versions of a category and an image after translating them:
+
+![The German version of the category "Handgemachte Schokolade": its title and summary in German, with the Translate with Supertext box in the sidebar](images/11-german-category.png)
+
+![The German version of an image: the title "Pralinen auf einem Holztablett" and the alternative text in German, next to the picture and the Translate with Supertext box](images/12-german-image.png)
+
 Only entries have revisions: a translation of a category, global set or image replaces the target site's texts without keeping the previous version.
 
 ## Review the translation

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Docs: the user guide shows a translated category and image, and the demo movie ends with the translated page *About us* (an entry nested in CKEditor, a table and a link label).
+
 ## 1.1.0 — 2026-11-25
 
 ### Added

@@ -3,7 +3,7 @@
  * Records the demo movie (docs/images/demo.gif and an MP4) from a FRESH demo (no translations yet)
  * whose plugin talks to stand-in.mjs, like screenshots.mjs. The editor opens the sample article in
  * English, translates it with the Supertext box into German and French and opens the German
- * version. See "Demo movie" in docs/DEVELOPER.md.
+ * version, then shows the German page "About us" (nested entry, table, link). See "Demo movie" in docs/DEVELOPER.md.
  *
  *   BASE_URL=http://127.0.0.1:8090 DEMO_EDITOR_EMAIL=… DEMO_EDITOR_PASSWORD=… npm run movie
  *
@@ -129,6 +129,37 @@ await kit.say('The German version is ready. Review it, and adjust it if you like
     const body = page.locator('.ck-content').first()
     if (await body.isVisible().catch(() => false)) await kit.moveTo(body)
   },
+})
+
+// 4. Not only articles: the page "About us" (an entry nested in CKEditor, a table, a link), translated
+// the same way off camera, and the other kinds of content.
+kit.pause()
+await page.goto(`${B}/admin/content/entries/pages?site=en`)
+const pageId = await page.locator('tr[data-id]').filter({ hasText: 'About us' }).first().getAttribute('data-id')
+await page.goto(`${B}/admin/content/entries/pages/${pageId}?site=en`)
+await box.locator('.st-translate').waitFor()
+await box.locator('.st-translate').click()
+await box.locator('.st-results li').first().waitFor({ timeout: 300_000 })
+await page.goto(`${B}/admin/content/entries/pages/${pageId}?site=de`)
+await page.locator('.ck-content').first().waitFor()
+await box.locator('.st-translate').waitFor()
+await page.waitForTimeout(500)
+await page.locator('#title').blur().catch(() => {})
+await kit.sync()
+kit.resume()
+await kit.say('Pages built with CKEditor work the same way: the nested entry, the table and the link label are translated too.', {
+  caption: 'Also translated: entries nested in <b>CKEditor</b>, <b>tables</b> and <b>links</b>',
+  during: async () => {
+    await kit.moveTo(page.locator('.ck-content .cke-entry-card').first())
+    await kit.hold(300)
+    await kit.moveTo(page.locator('[data-attribute="facts"]').first())
+    await kit.hold(300)
+    await kit.moveTo(page.locator('[data-attribute="cta"] input[type="text"]:visible').last())
+  },
+})
+await kit.say('Categories, global sets and images have the same box, and SEOmatic texts are translated as well.', {
+  caption: 'The same box for <b>categories</b>, <b>global sets</b> and <b>images</b>',
+  during: () => kit.moveTo(box.locator('legend')),
 })
 await kit.caption('')
 

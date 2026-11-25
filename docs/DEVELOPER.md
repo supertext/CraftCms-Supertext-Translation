@@ -258,7 +258,7 @@ BASE_URL=http://127.0.0.1:8090 DEMO_ADMIN_EMAIL=… DEMO_ADMIN_PASSWORD=… \
   DEMO_EDITOR_EMAIL=… DEMO_EDITOR_PASSWORD=… npm run screenshots
 ```
 
-`09-german-page.png` is the German page *About us* after translating it (nested callout, table, link); `10-global-set.png` the global set *Footer* with the box below its fields.
+`09-german-page.png` is the German page *About us* after translating it (nested callout, table, link); `10-global-set.png` the global set *Footer* with the box below its fields; `11-german-category.png` and `12-german-image.png` the German category and image after translating them with their boxes.
 
 The script shows the live API address instead of the stand-in's on the settings page, and the public demo's address (`SITE_URL`) instead of the local one under *Sites*.
 
@@ -275,7 +275,7 @@ npm run stand-in &                          # http://127.0.0.1:8765/v1/
 BASE_URL=http://127.0.0.1:8090 DEMO_EDITOR_EMAIL=… DEMO_EDITOR_PASSWORD=… npm run movie
 ```
 
-About 48 seconds, 1280×720, an English voice and English captions: the demo editor opens the sample article in English, keeps *Deutsch* and *Français* in the *Translate with Supertext* box (unticks *Italiano*), clicks *Translate* (the waiting time is cut) and opens the German version. The script skips Craft's autosave and "entry has been updated" checks in the recorded browser, so no draft appears. It writes the GIF (800 px, 12 fps, keep it under 3 MB) to `docs/images/demo.gif` and the MP4 to `tests/docs/movie/out/CraftCms-Supertext-Translation.mp4` (git-ignored; `MOVIE_OUT` changes the path). The MP4 is not committed; the GIF is silent. The voice model (63 MB, pinned revision, checked by SHA-256) is downloaded once into `tests/docs/movie/voice-cache/` (git-ignored, never committed); the time spent generating speech is cut from the movie. Re-record it in the same commit when the Supertext box changes.
+About 63 seconds, 1280×720, an English voice and English captions: the demo editor opens the sample article in English, keeps *Deutsch* and *Français* in the *Translate with Supertext* box (unticks *Italiano*), clicks *Translate* (the waiting time is cut) and opens the German version. Then the German page *About us* (translated off camera) shows the nested callout, the table and the link label, and the last line names categories, global sets, images and SEOmatic. The script skips Craft's autosave and "entry has been updated" checks in the recorded browser, so no draft appears. It writes the GIF (800 px, 12 fps, keep it under 3 MB) to `docs/images/demo.gif` and the MP4 to `tests/docs/movie/out/CraftCms-Supertext-Translation.mp4` (git-ignored; `MOVIE_OUT` changes the path). The MP4 is not committed; the GIF is silent. The voice model (63 MB, pinned revision, checked by SHA-256) is downloaded once into `tests/docs/movie/voice-cache/` (git-ignored, never committed); the time spent generating speech is cut from the movie. Re-record it in the same commit when the Supertext box changes.
 
 **Install and configuration movie** (`tests/docs/movie-install.mjs`, `npm run movie:install`): the same kit, voice and look, for administrators. Same setup as above (a made-up API key: the stand-in accepts any key), but signed in as the demo **administrator**:
 
