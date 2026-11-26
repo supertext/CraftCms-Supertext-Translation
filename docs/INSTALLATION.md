@@ -101,7 +101,7 @@ Supertext accepts exactly these codes (its `features` list, October 2026). The s
 | German, English, French, Italian, Portuguese | `de-DE`, `de-CH`, `de-AT`, `en-US`, `en-GB`, `fr-FR`, `fr-CH`, `it-IT`, `it-CH`, `pt-PT`, `pt-BR` |
 | Chinese, Serbian | `zh-Hans`, `zh-Hant`, `sr-Latn`, `sr-Cyrl` |
 | Swiss German | `gsw-u-sd-chzh` (Zurich), `gsw-u-sd-chbe` (Bern) |
-| All others, without region | `bg`, `cs`, `da`, `el`, `es`, `fi`, `hr`, `hu`, `ja`, `ko`, `nb`, `nl`, `pl`, `rm`, `ru`, `sk`, `sl`, `sq`, `sv`, `tr` |
+| All others, without region | `bg`, `cs`, `da`, `el`, `es`, `fi`, `hr`, `hu`, `id`, `ja`, `ko`, `nb`, `nl`, `pl`, `rm`, `ro`, `ru`, `sk`, `sl`, `sq`, `sv`, `th`, `tr`, `vi` |
 
 **Updating from an older version:** `php craft up` converts the Supertext languages saved by older versions (which could hold other spellings) to the list's: `de_ch` → `de-CH`, `de` → `de-DE`, `es-ES` → `es`. A value that is no Supertext language (e.g. `xx-YY`) is removed, logged as a warning, and the site shows its select again (with the suggestion or *— choose —*).
 

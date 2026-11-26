@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added: Indonesian, Romanian, Thai and Vietnamese (`id`, `ro`, `th`, `vi`) can be chosen as Supertext languages, all with formal and informal address (Supertext SDK 0.7.0).
 - Docs: the user guide shows a translated category and image, and the demo movie ends with the translated page *About us* (an entry nested in CKEditor, a table and a link label).
 
 ## 1.1.0 — 2026-11-25
