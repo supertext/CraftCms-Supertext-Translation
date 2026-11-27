@@ -32,6 +32,7 @@ use supertext\crafttranslation\api\SupertextException;
 use supertext\crafttranslation\helpers\FieldValues;
 use supertext\crafttranslation\helpers\Images;
 use supertext\crafttranslation\helpers\Links;
+use supertext\crafttranslation\helpers\Slugs;
 use supertext\crafttranslation\helpers\Messages;
 use supertext\crafttranslation\Plugin;
 use supertext\crafttranslation\records\ImageRecord;
@@ -174,15 +175,16 @@ class Translator extends Component
                     continue;
                 }
 
+                $siteUnits = $this->unitsFor($units, $target);
                 // Sites with *Translation review* on go through the review service (same key and protocol).
                 $translated = $this->translateUnits(
                     $client->forReview($settings->review($site->handle)),
-                    $units,
+                    $siteUnits,
                     $sourceSite ? $settings->sourceCode($sourceSite->handle, $sourceSite->language) : '',
                     $settings->targetCode($site->handle, $site->language),
                     $settings->politeness($site->handle),
                 );
-                $written = $this->apply($units, $translated, $siteId, $sourceSite?->getName() ?? '', $user);
+                $written = $this->apply($siteUnits, $translated, $siteId, $sourceSite?->getName() ?? '', $user);
                 $this->remember($elementId, $sourceSiteId, $siteId, $user);
                 $results[] = $result + ['status' => self::STATUS_TRANSLATED] + array_filter($written);
             } catch (\Throwable $e) {
@@ -279,7 +281,8 @@ class Translator extends Component
 
                 return $info + [
                     'segments' => $this->fileSegments($units),
-                    'write' => function (array $texts) use ($units, $elementId, $sourceSiteId, $targetSiteId, $user): void {
+                    'write' => function (array $texts) use ($units, $target, $elementId, $sourceSiteId, $targetSiteId, $user): void {
+                        $units = $this->unitsFor($units, $target);
                         $translations = [];
                         foreach ($units as $i => $unit) {
                             if (isset($texts[self::unitKey($unit)])) {
@@ -502,6 +505,21 @@ class Translator extends Component
         }
 
         return $element->getIsTitleTranslatable();
+    }
+
+    /**
+     * The units to write into a target site: without the slug when *Translate page addresses* says
+     * the site keeps its own (helpers/Slugs).
+     *
+     * @param list<Unit> $units
+     * @return list<Unit>
+     */
+    private function unitsFor(array $units, ElementInterface $target): array
+    {
+        $mode = Plugin::getInstance()->getSettings()->translateSlugs;
+
+        return array_values(array_filter($units, static fn(array $unit): bool => $unit['kind'] !== 'slug'
+            || Slugs::translate($mode, (string) $unit['value'], (string) $target->slug)));
     }
 
     /**

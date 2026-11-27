@@ -216,6 +216,11 @@ for (const site of targets) {
 	const changedAgain = items.filter((id) => second.bySite[site.id]?.[id]?.title && second.bySite[site.id][id].title !== source[id].title).length;
 	check(`${site.handle} (${site.language}): still translated after the second run`, changedAgain >= Math.ceil(items.length * 0.8), `${changedAgain}/${items.length} titles`);
 }
+// *Translate page addresses (slugs)* is "Only the first time" by default: overwriting keeps the slug.
+for (const site of targets) {
+	const before = first.bySite[site.id]?.[article.id]?.slug, after = second.bySite[site.id]?.[article.id]?.slug;
+	check(`${site.handle}: overwriting keeps the translated slug`, !!before && before === after, `${before} → ${after}`);
+}
 
 // --- The other content: page (entry nested in CKEditor, table, link), category, global set, image ---
 /** Translates the item into every target site with the Supertext box on its edit page. */

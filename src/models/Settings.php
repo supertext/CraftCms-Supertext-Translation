@@ -12,6 +12,7 @@ use craft\base\Model;
 use craft\helpers\App;
 use supertext\crafttranslation\api\Languages;
 use supertext\crafttranslation\api\SupertextClient;
+use supertext\crafttranslation\helpers\Slugs;
 
 /**
  * Plugin settings (stored in the project config). The API key is normally an
@@ -56,6 +57,13 @@ class Settings extends Model
      * fields, addresses of the site's pages) to the same page in the target site. On by default.
      */
     public bool $translateLinks = true;
+
+    /**
+     * When a translation changes the target site's slug: `new` (default) only while the site still
+     * has the source's slug, so a page's address doesn't change once it has its own; `always`;
+     * `never`. See helpers/Slugs.
+     */
+    public string $translateSlugs = Slugs::NEW;
 
     /**
      * Per site handle: Supertext language code (chosen in a select of Supertext's targets) and tone. Without a
@@ -195,6 +203,7 @@ class Settings extends Model
         return [
             [['environment'], 'in', 'range' => ['live', 'staging', 'testing']],
             [['saveMode'], 'in', 'range' => [self::SAVE_DRAFT, self::SAVE_DIRECT]],
+            [['translateSlugs'], 'in', 'range' => Slugs::MODES],
             [['timeout'], 'integer', 'min' => 10, 'max' => 1800],
             [['apiKey', 'apiUrl', 'reviewUrl'], 'string'],
             [['versionReports', 'saveAsDrafts', 'translateLinks'], 'boolean'],

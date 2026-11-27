@@ -8,7 +8,7 @@ Open an entry, tick the sites to translate into and click **Translate**: the tit
 
 - Uses Craft's own multi-site: one site per language, only translatable fields are translated
 - Rich text (CKEditor) keeps its headings, bold text, links and lists; whole sentences are translated
-- Translated slugs, so translated pages get translated URLs
+- Translated slugs, so translated pages get translated URLs (by default only the first time, so a live page's address doesn't change)
 - Sites with their own text are kept unless the editor explicitly overwrites them
 - Links to your own pages point to the same page in the target language; localized images (e.g. screenshots) are kept when a translation is updated, listed under *Utilities → Supertext images*
 - Saved directly into the site (default) or, with *Save translations as drafts*, as a draft to review and apply

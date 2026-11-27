@@ -126,7 +126,7 @@ Progress and errors appear in Craft's queue indicator (bottom left); failed jobs
 | Content | What happens |
 | --- | --- |
 | Title | Translated (unless the title is *Not translatable*). Image titles only when they are words: a file name such as `IMG_1234` stays. |
-| Slug (entries, categories) | Translated as words and turned back into a slug, e.g. `swiss-chocolate-shipped-worldwide` → `schweizer-schokolade-weltweit-versandt`. A one-word slug stays as it is. |
+| Slug (entries, categories) | Translated as words and turned back into a slug, e.g. `swiss-chocolate-shipped-worldwide` → `schweizer-schokolade-weltweit-versandt`. A one-word slug stays as it is. By default only the first time: once a site has its own slug, translating again keeps it, so the page's address doesn't change (your administrator can choose *Always* or *Never*). |
 | Alternative text (images) | Translated, if the volume translates it per site |
 | Plain Text fields | Translated, line breaks kept |
 | CKEditor (and Redactor) fields | Translated as HTML: headings, bold, italic, links and lists stay in place. Links to your own pages point to the target site's page (see [Links](#links-point-to-the-translated-pages)), other addresses are kept. Images: the source's, unless the site has its own (see [Your own images are kept](#your-own-images-are-kept)). |

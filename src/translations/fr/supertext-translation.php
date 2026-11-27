@@ -164,4 +164,9 @@ return [
     'Open draft' => 'Ouvrir le brouillon',
     '1 image to check' => '1 image à vérifier',
     '{count} images to check' => '{count} images à vérifier',
+    'Translate page addresses (slugs)' => 'Traduire les adresses des pages (slugs)',
+    'A translated slug changes the page’s address in that site, which breaks links and bookmarks to a live page. Links Supertext writes follow the page.' => 'Un slug traduit modifie l’adresse de la page dans ce site, ce qui casse les liens et les favoris vers une page en ligne. Les liens écrits par Supertext suivent la page.',
+    'Only the first time (while the site still has the source’s slug)' => 'Seulement la première fois (tant que le site a encore le slug de la source)',
+    'Always, also when overwriting a translation' => 'Toujours, aussi en écrasant une traduction',
+    'Never' => 'Jamais',
 ];

@@ -176,6 +176,19 @@
     on: settings.translateLinks,
 }) }}
 
+{{ forms.selectField({
+    label: 'Translate page addresses (slugs)'|t('supertext-translation'),
+    instructions: 'A translated slug changes the page’s address in that site, which breaks links and bookmarks to a live page. Links Supertext writes follow the page.'|t('supertext-translation'),
+    id: 'translateSlugs',
+    name: 'translateSlugs',
+    value: settings.translateSlugs,
+    options: [
+        { value: 'new', label: 'Only the first time (while the site still has the source’s slug)'|t('supertext-translation') },
+        { value: 'always', label: 'Always, also when overwriting a translation'|t('supertext-translation') },
+        { value: 'never', label: 'Never'|t('supertext-translation') },
+    ],
+}) }}
+
 <p class="light">{{ 'Images in CKEditor text: overwriting a translation keeps a site’s own images (such as localized screenshots) as long as the source’s image in that place doesn’t change. See Utilities → Supertext images.'|t('supertext-translation') }}</p>
 
 <hr>

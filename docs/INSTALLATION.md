@@ -149,11 +149,12 @@ All settings are in *Settings → Plugins → Supertext Translation* and stored 
 | Review service address | Supertext's review service | Address of the review service for sites with *Translation review* on; may be an environment variable reference. Empty turns review off for every site. `SUPERTEXT_REVIEW_URL` on the server wins. Only change it when Supertext gives you another address. |
 | Languages | the suggestion | Per site: Supertext language (a select of Supertext's list; preselected with the site's language or its default, `de` → `de-DE`; *— choose —* where there is none), form of address (only where Supertext offers it) and *Translation review* (off by default, see [Translation review](#translation-review)). `config/supertext-translation.php` → `languages` overrides it. See [Languages](#languages). |
 | Save translations as drafts | Off | Off: translations are saved into the target site directly, keeping its status (live if it was live). On: entries are translated into a draft of the target site, named *Supertext: <site name>*, for editors to review and apply; the live entry stays unchanged until then. Categories, global sets and assets have no drafts and are saved directly. |
+| Translate page addresses (slugs) | Only the first time | When a translation changes the target site's slug: *Only the first time* (while the site still has the source's slug; translating again keeps the site's slug, so a live page's address doesn't change), *Always* (also when overwriting a translation; old links and bookmarks to the page stop working) or *Never*. Links Supertext writes into other content follow the page either way. |
 | Point links to the translated pages | On | Links to this website's own entries and categories (reference tags in CKEditor text and Link fields, and addresses of the source site's pages) point to the same page in the target site. Off: links stay as in the source. |
 | Timeout | 180 | Seconds to wait for the translation of one site. |
 | Send version information to Supertext | On | See [Version information and the API key check](#version-information-and-the-api-key-check). The environment variable `SUPERTEXT_VERSION_REPORTS=0` (or `false`, `off`, `no`) on the server turns it off regardless of the setting (`1` turns it on). |
 
-![The Saving section of the settings: Save translations as drafts (off), Point links to the translated pages (on) and the note about images in CKEditor text](images/13-settings-saving.png)
+![The Saving section of the settings: Save translations as drafts (off), Point links to the translated pages (on), Translate page addresses (slugs) set to Only the first time and the note about images in CKEditor text](images/13-settings-saving.png)
 
 **Localized images** need no setting: when a translation is overwritten, a site's own images in CKEditor text are kept as long as the source's image in that place doesn't change. *Utilities → Supertext images* lists them and the ones to check; it needs the *Utilities → Supertext images* permission (administrators have it).
 
@@ -214,6 +215,7 @@ The index action *Translate with Supertext* (entries, categories, assets) transl
 | A link still points to the source site's page | *Point links to the translated pages* is off, the page doesn't exist in the target site, or the address isn't one of the source site's pages (another site, a redirect, a page Craft doesn't route). |
 | *Utilities → Supertext images* is missing | The user lacks the utility's permission (*Utilities → Supertext images* under *General* in the user group's permissions). |
 | A localized image was replaced by the source's | The source's image in that place was replaced (the site gets the new one, marked *to check*), or images were added or removed in that site only. Put the site's image back and click *Mark as checked*. |
+| A translated page kept its old (or the source's) address | *Translate page addresses (slugs)* is *Only the first time* and the site already had its own slug, or it is *Never*. Change the slug by hand or choose *Always*. A one-word slug is never translated. |
 | A field isn't translated | Its Translation Method is *Not translatable*, or its type isn't supported (see above). |
 | Bulk translations don't run | The queue isn't running (see *Background translation*). Failed jobs show the reason in *Utilities → Queue Manager*. |
 

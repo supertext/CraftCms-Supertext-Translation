@@ -2,15 +2,19 @@
 
 ## Unreleased
 
+## 1.3.0 — 2026-11-27
+
 ### Added
 
 - **Links point to the translated pages:** links to the website's own entries and categories (in CKEditor text and Link fields, and addresses of the source site's pages typed by hand) point to the same page in the target site, with anchor and query kept. Setting *Point links to the translated pages* (on by default).
 - **Localized images are kept:** when a translation is overwritten, a site's own images in CKEditor text (such as localized screenshots) stay as long as the source's image in that place hasn't changed, with the newly translated alternative text. If the source's image was replaced, the site gets the new one, marked *to check*. The box shows *N image(s) to check*; the new *Utilities → Supertext images* lists every translated image, source and site side by side, with *Mark as checked*.
 - **Save translations as drafts** (off by default): entries are translated into a draft of the target site (*Supertext: <site name>*) for editors to review and apply, and the box links to it (*Open draft*). Off, translations are saved directly as before.
+- **Translate page addresses (slugs)**: *Only the first time* (default), *Always* or *Never*.
 - In English, German, French and Italian.
 
 ### Changed
 
+- Slugs are now translated only while a site still has the source's slug: overwriting a translation keeps the site's slug, so a live page's address no longer changes. Choose *Always* under *Translate page addresses (slugs)* for the previous behaviour.
 - CKEditor text is sent with its stored reference tags (`{entry:…}`, `{asset:…}`) instead of the addresses they resolve to, so links and images stay linked to their entries and assets in every site.
 
 ## 1.2.0 — 2026-11-26

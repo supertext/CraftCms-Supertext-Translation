@@ -164,4 +164,9 @@ return [
     'Open draft' => 'Entwurf öffnen',
     '1 image to check' => '1 Bild zu prüfen',
     '{count} images to check' => '{count} Bilder zu prüfen',
+    'Translate page addresses (slugs)' => 'Seitenadressen übersetzen (Slugs)',
+    'A translated slug changes the page’s address in that site, which breaks links and bookmarks to a live page. Links Supertext writes follow the page.' => 'Ein übersetzter Slug ändert die Adresse der Seite in dieser Website; Links und Lesezeichen auf eine Live-Seite funktionieren dann nicht mehr. Links, die Supertext schreibt, folgen der Seite.',
+    'Only the first time (while the site still has the source’s slug)' => 'Nur beim ersten Mal (solange die Website noch den Slug der Quelle hat)',
+    'Always, also when overwriting a translation' => 'Immer, auch beim Überschreiben einer Übersetzung',
+    'Never' => 'Nie',
 ];
