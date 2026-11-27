@@ -30,8 +30,11 @@ use supertext\crafttranslation\api\FileExchange;
 use supertext\crafttranslation\api\SupertextClient;
 use supertext\crafttranslation\api\SupertextException;
 use supertext\crafttranslation\helpers\FieldValues;
+use supertext\crafttranslation\helpers\Images;
+use supertext\crafttranslation\helpers\Links;
 use supertext\crafttranslation\helpers\Messages;
 use supertext\crafttranslation\Plugin;
+use supertext\crafttranslation\records\ImageRecord;
 use supertext\crafttranslation\records\TranslationRecord;
 
 /**
@@ -81,6 +84,12 @@ class Translator extends Component
     /** @var array<string, array{entries: array<int, ?Entry>, displaced: list<Entry>}> owner id:field:site id => its nested entries in that site */
     private array $nestedMaps = [];
 
+    /** *Save translations as drafts*: the draft being written (of the entry in the target site), else null. */
+    private ?Entry $draft = null;
+
+    /** @var array<int, Entry> in the draft: canonical nested (Matrix) entry id => the draft's own copy */
+    private array $draftNested = [];
+
     /**
      * The element's sites, for the Supertext box.
      *
@@ -119,7 +128,7 @@ class Translator extends Component
 
     /**
      * @param list<int> $targetSiteIds
-     * @return list<array{siteId: int, site: string, status: string, message?: string}>
+     * @return list<array{siteId: int, site: string, status: string, message?: string, imagesToCheck?: int, draftUrl?: string}>
      */
     public function translate(int $elementId, int $sourceSiteId, array $targetSiteIds, bool $overwrite, ?User $user = null): array
     {
@@ -173,9 +182,9 @@ class Translator extends Component
                     $settings->targetCode($site->handle, $site->language),
                     $settings->politeness($site->handle),
                 );
-                $this->apply($units, $translated, $siteId, $sourceSite?->getName() ?? '', $user);
+                $written = $this->apply($units, $translated, $siteId, $sourceSite?->getName() ?? '', $user);
                 $this->remember($elementId, $sourceSiteId, $siteId, $user);
-                $results[] = $result + ['status' => self::STATUS_TRANSLATED];
+                $results[] = $result + ['status' => self::STATUS_TRANSLATED] + array_filter($written);
             } catch (\Throwable $e) {
                 if (!$e instanceof SupertextException) {
                     Craft::error($e, __METHOD__);
@@ -447,7 +456,7 @@ class Translator extends Component
                     }
                     break;
                 default:
-                    $value = trim((string) $element->getFieldValue($handle));
+                    $value = trim($kind === 'html' ? FieldValues::html($element->getFieldValue($handle)) : (string) $element->getFieldValue($handle));
                     if ($value !== '') {
                         $add(['field' => $handle, 'kind' => $kind, 'value' => $value]);
                     }
@@ -533,7 +542,7 @@ class Translator extends Component
         }
         $handle = (string) $unit['field'];
         if ($unit['path'] === null) {
-            return trim((string) $element->getFieldValue($handle));
+            return trim($unit['kind'] === 'html' ? FieldValues::html($element->getFieldValue($handle)) : (string) $element->getFieldValue($handle));
         }
         $field = $element->getFieldLayout()?->getFieldByHandle($handle);
         [$type, $a, $b] = explode(':', $unit['path'], 3) + [null, null, null];
@@ -567,15 +576,47 @@ class Translator extends Component
 
     /**
      * Writes the translations to the elements in the target site and saves them (nested entries
-     * first, then their owners; for entries this creates a revision).
+     * first, then their owners; for entries this creates a revision). With *Save translations as
+     * drafts*, an entry's translation goes into a new draft of the target site instead.
+     *
+     * Links to the source site's pages are pointed to the target site's (*Point links to the
+     * translated pages*), and in HTML fields the target's own images are kept (helpers\Images).
      *
      * @param list<Unit> $units
      * @param array<int, string> $translations
+     * @return array{imagesToCheck: int, draftUrl: ?string}
      */
-    private function apply(array $units, array $translations, int $siteId, string $sourceName, ?User $user): void
+    private function apply(array $units, array $translations, int $siteId, string $sourceName, ?User $user): array
     {
         $this->resolved = [];
         $this->nestedMaps = [];
+        $this->draft = null;
+        $this->draftNested = [];
+        $settings = Plugin::getInstance()->getSettings();
+        $root = null;
+        foreach ($units as $unit) {
+            if ($unit['depth'] === 0 && $unit['via'] === null) {
+                $root = $unit['element'];
+                break;
+            }
+        }
+        $sourceSiteId = (int) ($root ?? ($units[0]['element'] ?? null))?->siteId;
+        if ($settings->saveAsDrafts && $root instanceof Entry) {
+            $this->startDraft($root, $siteId, $sourceName, $user);
+        }
+        /** @var list<array{0: ElementInterface, 1: string, 2: list<array{slot: int, originalSrc: string, src: string, status: string, reason?: string}>}> $imageRecords */
+        $imageRecords = [];
+        $localize = fn(string $text): string => $settings->translateLinks ? $this->localizeLinks($text, $sourceSiteId, $siteId) : $text;
+        // An HTML field's new value: links localized, the target's own images kept.
+        $finishHtml = function (ElementInterface $element, string $handle, string $html) use ($localize, &$imageRecords): string {
+            $html = $localize($html);
+            $merged = Images::merge($html, FieldValues::html($element->getFieldValue($handle)), $this->imagesOf($element, $handle));
+            if ($merged['records'] !== [] || $this->imagesOf($element, $handle) !== null) {
+                $imageRecords[] = [$element, $handle, $merged['records']];
+            }
+
+            return $merged['html'];
+        };
         /** @var array<int, ElementInterface> $sources source element id => source element */
         $sources = [];
         /** @var array<int, ElementInterface|null> $targets source element id => target element */
@@ -617,6 +658,8 @@ class Translator extends Component
                 $element->slug = ElementHelper::generateSlug($text, null, Craft::$app->getSites()->getSiteById($siteId)?->language);
             } elseif ($unit['attribute'] !== null) {
                 $element->{$unit['attribute']} = $text;
+            } elseif ($unit['kind'] === 'html') {
+                $element->setFieldValue((string) $unit['field'], $finishHtml($element, (string) $unit['field'], $text));
             } else {
                 $element->setFieldValue((string) $unit['field'], $text);
             }
@@ -636,6 +679,9 @@ class Translator extends Component
                     $field !== null && is_a($field, FieldValues::SEOMATIC_FIELD) => FieldValues::composeSeo($field, $sources[$id], $element, $texts),
                     default => false,
                 };
+                if ($field instanceof Link && \is_array($value) && \is_string($value['value'] ?? null)) {
+                    $value['value'] = $localize($value['value']);
+                }
                 if ($value !== false && $value !== null) {
                     $element->setFieldValue($handle, $value);
                 }
@@ -667,7 +713,7 @@ class Translator extends Component
                     $html .= $parts[$id][$handle]["chunk:$i"] ?? $chunk['html'];
                 }
             }
-            $element->setFieldValue($handle, $html);
+            $element->setFieldValue($handle, $finishHtml($element, $handle, $html));
             array_push($displaced, ...$map['displaced']);
         }
 
@@ -680,7 +726,7 @@ class Translator extends Component
             if (!$element) {
                 continue;
             }
-            if ($element instanceof Entry && ($depths[$id] ?? 0) === 0) {
+            if ($element instanceof Entry && ($depths[$id] ?? 0) === 0 && !$element->getIsDraft()) {
                 $element->setRevisionNotes(Craft::t('supertext-translation', 'Translated with Supertext from {site}', ['site' => $sourceName]));
                 if ($user) {
                     $element->revisionCreatorId = $user->id;
@@ -693,9 +739,144 @@ class Translator extends Component
         }
 
         // The target site's nested entries that the new HTML no longer contains (to the trash, restorable).
-        foreach ($displaced as $entry) {
-            Craft::$app->getElements()->deleteElement($entry);
+        // In a draft they still belong to the live entry: applying the draft takes care of them.
+        if ($this->draft === null) {
+            foreach ($displaced as $entry) {
+                Craft::$app->getElements()->deleteElement($entry);
+            }
         }
+
+        $toCheck = 0;
+        foreach ($imageRecords as [$element, $handle, $records]) {
+            $this->saveImages($element, $handle, $sourceSiteId, $records);
+            $toCheck += \count(array_filter($records, static fn(array $r) => $r['status'] === Images::CHECK));
+        }
+        $draftUrl = $this->draft?->getCpEditUrl();
+        $this->draft = null;
+        $this->draftNested = [];
+
+        return ['imagesToCheck' => $toCheck, 'draftUrl' => $draftUrl];
+    }
+
+    /**
+     * *Save translations as drafts*: a new draft of the entry in the target site, named after the
+     * site, with its own copies of the Matrix fields' nested entries (as the control panel makes
+     * them when an editor changes one in a draft), so nothing live is changed.
+     */
+    private function startDraft(Entry $source, int $siteId, string $sourceName, ?User $user): void
+    {
+        $canonical = $this->elementInSite((int) $source->id, $siteId);
+        if (!$canonical instanceof Entry) {
+            return;
+        }
+        $site = Craft::$app->getSites()->getSiteById($siteId);
+        $drafts = Craft::$app->getDrafts();
+        $draft = $drafts->createDraft(
+            $canonical,
+            $user !== null ? (int) $user->id : $canonical->getAuthorId(),
+            Craft::t('supertext-translation', 'Supertext: {site}', ['site' => $site?->getName() ?? (string) $siteId]),
+            Craft::t('supertext-translation', 'Translated with Supertext from {site}', ['site' => $sourceName]),
+        );
+        $copies = [];
+        foreach ($draft->getFieldLayout()?->getCustomFields() ?? [] as $field) {
+            if (!$field instanceof Matrix) {
+                continue;
+            }
+            /** @var \craft\elements\db\EntryQuery $query */
+            $query = $draft->getFieldValue($field->handle);
+            $nested = (clone $query)->status(null)->all();
+            if ($nested === []) {
+                continue;
+            }
+            $data = ['entries' => [], 'sortOrder' => []];
+            foreach ($nested as $entry) {
+                $data['entries'][(string) $entry->id] = ['type' => $entry->getType()->handle, 'enabled' => $entry->enabled, 'title' => $entry->title, 'fields' => []];
+                $data['sortOrder'][] = (string) $entry->id;
+            }
+            $draft->setFieldValue($field->handle, $data);
+            $copies[$field->id] = array_map(static fn(Entry $e) => (int) $e->id, $nested);
+        }
+        if ($copies !== []) {
+            if (!Craft::$app->getElements()->saveElement($draft)) {
+                throw new SupertextException(Craft::t('supertext-translation', 'The translation could not be saved: {errors}', ['errors' => implode(' ', $draft->getFirstErrors())]));
+            }
+            foreach ($copies as $fieldId => $ids) {
+                $own = Entry::find()->ownerId($draft->id)->fieldId($fieldId)->siteId($siteId)->status(null)->all();
+                foreach ($ids as $k => $id) {
+                    if (isset($own[$k])) {
+                        $this->draftNested[$id] = $own[$k];
+                    }
+                }
+            }
+        }
+        $this->draft = Entry::find()->id($draft->id)->siteId($siteId)->drafts()->status(null)->one() ?? $draft;
+    }
+
+    /** Links to the source site's entries and categories, pointed to the target site's (helpers\Links). */
+    private function localizeLinks(string $text, int $sourceSiteId, int $targetSiteId): string
+    {
+        $base = Craft::$app->getSites()->getSiteById($sourceSiteId)?->getBaseUrl() ?? '';
+        $basePath = '/' . ltrim((string) parse_url($base, PHP_URL_PATH), '/');
+
+        return Links::localize(
+            $text,
+            $sourceSiteId,
+            $targetSiteId,
+            static function (string $type, int $id, int $siteId): ?string {
+                $element = ($type === 'category' ? Category::find() : Entry::find())->id($id)->siteId($siteId)->status(null)->one();
+
+                return $element ? (string) ($element->getUrl() ?? '') : null;
+            },
+            static function (string $href) use ($base, $basePath, $sourceSiteId): ?array {
+                if ($base !== '' && str_starts_with($href, $base)) {
+                    $uri = substr($href, \strlen($base));
+                } elseif (str_starts_with($href, '/') && !str_starts_with($href, '//') && str_starts_with($href, $basePath)) {
+                    $uri = substr($href, \strlen($basePath));
+                } else {
+                    return null;
+                }
+                $uri = trim($uri, '/');
+                $element = Craft::$app->getElements()->getElementByUri($uri === '' ? '__home__' : $uri, $sourceSiteId, true);
+
+                return match (true) {
+                    $element instanceof Entry => ['entry', (int) $element->id],
+                    $element instanceof Category => ['category', (int) $element->id],
+                    default => null,
+                };
+            },
+        );
+    }
+
+    /** The key of an element's image record: its canonical id (a draft's images belong to the entry). */
+    private static function imageKey(ElementInterface $element): int
+    {
+        return (int) ($element->getIsDerivative() ? $element->getCanonicalId() : $element->id);
+    }
+
+    /**
+     * The images the plugin last wrote into an HTML field of the element (its site), null if none.
+     *
+     * @return list<array{slot: int, originalSrc: string, src: string, status: string, reason?: string}>|null
+     */
+    public function imagesOf(ElementInterface $element, string $field): ?array
+    {
+        $record = ImageRecord::findOne(['elementId' => self::imageKey($element), 'siteId' => (int) $element->siteId, 'field' => $field]);
+        if (!$record) {
+            return null;
+        }
+        $images = json_decode($record->images, true);
+
+        return \is_array($images) ? array_values($images) : [];
+    }
+
+    /** @param list<array{slot: int, originalSrc: string, src: string, status: string, reason?: string}> $images */
+    private function saveImages(ElementInterface $element, string $field, int $sourceSiteId, array $images): void
+    {
+        $where = ['elementId' => self::imageKey($element), 'siteId' => (int) $element->siteId, 'field' => $field];
+        $record = ImageRecord::findOne($where) ?? new ImageRecord($where);
+        $record->sourceSiteId = $sourceSiteId;
+        $record->images = (string) json_encode($images, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+        $record->save(false);
     }
 
     /** @param list<Unit> $units */
@@ -722,6 +903,15 @@ class Translator extends Component
     {
         if ((int) $source->siteId === $siteId) {
             return $source;
+        }
+        // Writing a draft: the draft instead of the live entry, and its own copies of nested entries.
+        if ($this->draft !== null && (int) $this->draft->siteId === $siteId) {
+            if ((int) $source->id === (int) $this->draft->getCanonicalId()) {
+                return $this->draft;
+            }
+            if (isset($this->draftNested[(int) $source->id])) {
+                return $this->draftNested[(int) $source->id];
+            }
         }
         $key = $source->id . ':' . $siteId;
         if (\array_key_exists($key, $this->resolved)) {
@@ -756,7 +946,14 @@ class Translator extends Component
         $used = [];
         foreach ($sourceEntries as $k => $sourceEntry) {
             $candidate = $targetEntries[$k] ?? null;
-            if ($candidate && $sourceEntry && $candidate->typeId === $sourceEntry->typeId) {
+            if ($candidate && $sourceEntry && $candidate->typeId === $sourceEntry->typeId && $create && $this->draft !== null && $targetOwner === $this->draft) {
+                // In a draft, the live entry's nested entry stays as it is: the draft gets its own copy.
+                $entries[$k] = Craft::$app->getElements()->duplicateElement($candidate, [
+                    'siteId' => $siteId,
+                    'ownerId' => $targetOwner->id,
+                    'primaryOwnerId' => $targetOwner->id,
+                ]);
+            } elseif ($candidate && $sourceEntry && $candidate->typeId === $sourceEntry->typeId) {
                 $entries[$k] = $candidate;
                 $used[$candidate->id] = true;
             } elseif ($create && $sourceEntry && $targetOwner) {

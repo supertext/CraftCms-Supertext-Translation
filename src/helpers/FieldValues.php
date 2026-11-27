@@ -64,6 +64,20 @@ final class FieldValues
         return $chunks;
     }
 
+    /**
+     * An HTML field's stored HTML: CKEditor's and Redactor's raw content, with reference tags such as
+     * `{entry:12@1:url||…}` and `{asset:5:url||…}` as they are (casting the value to a string
+     * would resolve them to addresses).
+     */
+    public static function html(mixed $value): string
+    {
+        if (\is_object($value) && method_exists($value, 'getRawContent')) {
+            return (string) $value->getRawContent();
+        }
+
+        return \is_string($value) || $value instanceof \Stringable ? (string) $value : '';
+    }
+
     /** @param list<array{html: ?string, entry: ?Entry}> $chunks */
     public static function hasEntries(array $chunks): bool
     {

@@ -26,7 +26,8 @@
   "Pralines on a wooden tray": "Pralinen auf einem Holztablett",
   "Six hand-decorated pralines on a wooden tray": "Sechs von Hand verzierte Pralinen auf einem Holztablett",
   "Shops in Switzerland": "Läden in der Schweiz",
-  "Bern, Zurich and Basel": "Bern, Zürich und Basel"
+  "Bern, Zurich and Basel": "Bern, Zürich und Basel",
+  "<p>Thank you for choosing our pralines.</p><p>Read <a href=\"@@0@@\">how we ship worldwide</a> or see <a href=\"@@1@@\">our highlights</a>.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Six hand-decorated pralines on a wooden tray\" /></figure>": "<p>Vielen Dank, dass Sie sich für unsere Pralinen entschieden haben.</p><p>Lesen Sie, <a href=\"@@0@@\">wie wir weltweit versenden</a>, oder sehen Sie sich <a href=\"@@1@@\">unsere Highlights</a> an.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Sechs von Hand verzierte Pralinen auf einem Holztablett\" /></figure>"
  },
  "fr": {
   "Swiss chocolate, shipped worldwide": "Chocolat suisse, expédié dans le monde entier",
@@ -55,7 +56,8 @@
   "Pralines on a wooden tray": "Pralines sur un plateau en bois",
   "Six hand-decorated pralines on a wooden tray": "Six pralines décorées à la main sur un plateau en bois",
   "Shops in Switzerland": "Boutiques en Suisse",
-  "Bern, Zurich and Basel": "Berne, Zurich et Bâle"
+  "Bern, Zurich and Basel": "Berne, Zurich et Bâle",
+  "<p>Thank you for choosing our pralines.</p><p>Read <a href=\"@@0@@\">how we ship worldwide</a> or see <a href=\"@@1@@\">our highlights</a>.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Six hand-decorated pralines on a wooden tray\" /></figure>": "<p>Merci d’avoir choisi nos pralines.</p><p>Découvrez <a href=\"@@0@@\">comment nous expédions dans le monde entier</a> ou voyez <a href=\"@@1@@\">nos points forts</a>.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Six pralines décorées à la main sur un plateau en bois\" /></figure>"
  },
  "it": {
   "Swiss chocolate, shipped worldwide": "Cioccolato svizzero, spedito in tutto il mondo",
@@ -84,6 +86,7 @@
   "Pralines on a wooden tray": "Praline su un vassoio di legno",
   "Six hand-decorated pralines on a wooden tray": "Sei praline decorate a mano su un vassoio di legno",
   "Shops in Switzerland": "Negozi in Svizzera",
-  "Bern, Zurich and Basel": "Berna, Zurigo e Basilea"
+  "Bern, Zurich and Basel": "Berna, Zurigo e Basilea",
+  "<p>Thank you for choosing our pralines.</p><p>Read <a href=\"@@0@@\">how we ship worldwide</a> or see <a href=\"@@1@@\">our highlights</a>.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Six hand-decorated pralines on a wooden tray\" /></figure>": "<p>Grazie per aver scelto le nostre praline.</p><p>Scopra <a href=\"@@0@@\">come spediamo in tutto il mondo</a> o veda <a href=\"@@1@@\">i nostri punti di forza</a>.</p><figure class=\"image\"><img src=\"@@2@@\" alt=\"Sei praline decorate a mano su un vassoio di legno\" /></figure>"
  }
 }

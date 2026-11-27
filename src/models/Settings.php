@@ -38,8 +38,24 @@ class Settings extends Model
      */
     public string $reviewUrl = SupertextClient::REVIEW_URL;
 
-    /** How translations are saved: as a draft for review (default) or directly. */
+    /**
+     * Unused (from an early version, never read); kept so stored project configs still load.
+     * See $saveAsDrafts.
+     */
     public string $saveMode = self::SAVE_DRAFT;
+
+    /**
+     * Save translations of entries as a draft of the target site (named "Supertext: <site>") for
+     * review, instead of saving them into the site directly. Off by default: translations are saved
+     * into the site, which keeps its status (live if it was live).
+     */
+    public bool $saveAsDrafts = false;
+
+    /**
+     * Point links to the source site's own pages (CKEditor links to entries and categories, Link
+     * fields, addresses of the site's pages) to the same page in the target site. On by default.
+     */
+    public bool $translateLinks = true;
 
     /**
      * Per site handle: Supertext language code (chosen in a select of Supertext's targets) and tone. Without a
@@ -181,7 +197,7 @@ class Settings extends Model
             [['saveMode'], 'in', 'range' => [self::SAVE_DRAFT, self::SAVE_DIRECT]],
             [['timeout'], 'integer', 'min' => 10, 'max' => 1800],
             [['apiKey', 'apiUrl', 'reviewUrl'], 'string'],
-            [['versionReports'], 'boolean'],
+            [['versionReports', 'saveAsDrafts', 'translateLinks'], 'boolean'],
             [['languages'], 'validateLanguages'],
         ];
     }

@@ -117,7 +117,14 @@
                 results.innerHTML = response.data.results.map((r) => {
                     const site = info.sites.find((s) => s.id === r.siteId);
                     if (r.status === 'translated') {
-                        return `<li class="ok">${esc(r.site)}: ${esc(t('translated'))} – <a href="${esc(siteUrl(site.handle))}">${esc(t('Open'))}</a></li>`;
+                        // Saved as a draft (*Save translations as drafts*): the draft's own page.
+                        const done = r.draftUrl
+                            ? `${esc(t('saved as a draft'))} – <a href="${esc(r.draftUrl)}">${esc(t('Open draft'))}</a>`
+                            : `${esc(t('translated'))} – <a href="${esc(siteUrl(site.handle))}">${esc(t('Open'))}</a>`;
+                        const images = r.imagesToCheck
+                            ? ` · <a href="${esc(Craft.getCpUrl('utilities/supertext-images', { status: 'check' }))}">${esc(t(r.imagesToCheck === 1 ? '1 image to check' : '{count} images to check', { count: r.imagesToCheck }))}</a>`
+                            : '';
+                        return `<li class="ok">${esc(r.site)}: ${done}${images}</li>`;
                     }
                     if (r.status === 'skipped') {
                         return `<li class="skipped">${esc(r.site)}: ${esc(t('already translated, skipped'))}</li>`;

@@ -74,6 +74,7 @@ class SetupController extends Controller
         $topics = $this->topics($sites);
         $footer = $this->footer();
         $images = $this->images();
+        $this->linksAndImage();
         $this->grant($group, [
             ...array_map(fn(string $action) => "{$action}:{$pages->uid}", ['viewEntries', 'createEntries', 'saveEntries', 'viewPeerEntries', 'savePeerEntries', 'viewPeerEntryDrafts', 'savePeerEntryDrafts']),
             "viewCategories:{$topics->uid}", "saveCategories:{$topics->uid}",
@@ -262,7 +263,8 @@ class SetupController extends Controller
             'name' => 'Content',
             'handle' => 'content',
             'translationMethod' => 'site',
-            'toolbar' => ['heading', '|', 'bold', 'italic', 'link', '|', 'bulletedList', 'numberedList', '|', 'createEntry'],
+            'toolbar' => ['heading', '|', 'bold', 'italic', 'link', '|', 'bulletedList', 'numberedList', '|', 'insertImage', 'createEntry'],
+            'availableVolumes' => '*',
             'entryTypes' => [$callout],
         ]));
         $facts = $this->field('facts', fn() => new Table([
@@ -349,6 +351,40 @@ class SetupController extends Controller
             . '<p>Thank you for choosing our pralines.</p>');
         $this->save($elements->saveElement($page), $page, 'sample page content');
         $this->log('Sample page added.');
+    }
+
+    /**
+     * "About us" links to the sample article (an entry link and its address) and shows the sample
+     * image, so translating it shows links pointed to the same language and images kept per site.
+     * Added to demos set up before (only where the page has no entry link yet).
+     */
+    private function linksAndImage(): void
+    {
+        $fields = Craft::$app->getFields();
+        $content = $fields->getFieldByHandle('content');
+        if ($content instanceof \craft\ckeditor\Field && !\in_array('insertImage', (array) $content->toolbar, true)) {
+            $content->toolbar = array_merge((array) $content->toolbar, ['insertImage']);
+            $content->availableVolumes = '*';
+            $this->save($fields->saveField($content), $content, 'field content (images)');
+        }
+        $primary = Craft::$app->getSites()->getPrimarySite();
+        $page = Entry::find()->section('pages')->slug('about-us')->siteId($primary->id)->status(null)->one();
+        $article = Entry::find()->section('articles')->siteId($primary->id)->status(null)->orderBy(['elements.id' => SORT_ASC])->one();
+        $asset = Asset::find()->volume('images')->status(null)->orderBy(['elements.id' => SORT_ASC])->one();
+        if (!$page || !$article || !$asset) {
+            return;
+        }
+        $value = $page->getFieldValue('content');
+        $html = \is_object($value) && method_exists($value, 'getRawContent') ? (string) $value->getRawContent() : (string) $value;
+        if (str_contains($html, '{entry:')) {
+            return;
+        }
+        $html .= '<p>Read <a href="{entry:' . $article->id . '@' . $primary->id . ':url||' . $article->getUrl() . '}">how we ship worldwide</a> '
+            . 'or see <a href="' . $article->getUrl() . '#highlights">our highlights</a>.</p>'
+            . '<figure class="image"><img src="{asset:' . $asset->id . ':url||' . $asset->getUrl() . '}" alt="Six hand-decorated pralines on a wooden tray"></figure>';
+        $page->setFieldValue('content', $html);
+        $this->save(Craft::$app->getElements()->saveElement($page), $page, 'sample page links and image');
+        $this->log('Sample page: link to the article and the sample image added.');
     }
 
     /** @param Site[] $sites */

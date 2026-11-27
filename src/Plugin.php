@@ -21,7 +21,10 @@ use craft\elements\GlobalSet;
 use craft\events\DefineHtmlEvent;
 use craft\events\RegisterElementActionsEvent;
 use craft\events\RegisterUserPermissionsEvent;
+use craft\events\RegisterComponentTypesEvent;
 use craft\services\UserPermissions;
+use craft\services\Utilities;
+use supertext\crafttranslation\utilities\ImagesUtility;
 use supertext\crafttranslation\api\Languages;
 use supertext\crafttranslation\api\Reporting as ApiReporting;
 use supertext\crafttranslation\api\SupertextClient;
@@ -53,7 +56,7 @@ class Plugin extends BasePlugin
 {
     public const PERMISSION = 'supertext-translation:translate';
 
-    public string $schemaVersion = '1.2.0';
+    public string $schemaVersion = '1.3.0';
     public bool $hasCpSettings = true;
 
     public static function config(): array
@@ -78,6 +81,11 @@ class Plugin extends BasePlugin
                     self::PERMISSION => ['label' => Craft::t('supertext-translation', 'Translate content with Supertext')],
                 ],
             ];
+        });
+
+        // Utilities → Supertext images (localized images kept when translations are overwritten).
+        Event::on(Utilities::class, Utilities::EVENT_REGISTER_UTILITIES, function (RegisterComponentTypesEvent $event) {
+            $event->types[] = ImagesUtility::class;
         });
 
         foreach ([Entry::class, Category::class, Asset::class] as $type) {

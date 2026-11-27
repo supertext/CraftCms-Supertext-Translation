@@ -33,7 +33,7 @@ php craft up
 
 ### Uninstall
 
-*Settings → Plugins → Supertext Translation → Uninstall* (or `php craft plugin/uninstall supertext-translation`), then `composer remove supertext/craft-supertext-translation`. Translations already made are normal entry content and stay; only the plugin's table and settings are removed.
+*Settings → Plugins → Supertext Translation → Uninstall* (or `php craft plugin/uninstall supertext-translation`), then `composer remove supertext/craft-supertext-translation`. Translations already made are normal entry content and stay; only the plugin's tables (last translations, recorded images, the reporter's state) and settings are removed.
 
 ## API key
 
@@ -148,8 +148,14 @@ All settings are in *Settings → Plugins → Supertext Translation* and stored 
 | Custom API address | – | A different base URL (proxy, test server); may be an environment variable such as `$SUPERTEXT_API_URL`. Overrides *Supertext API*. For [Translation review](#translation-review) use the sites' switch instead. |
 | Review service address | Supertext's review service | Address of the review service for sites with *Translation review* on; may be an environment variable reference. Empty turns review off for every site. `SUPERTEXT_REVIEW_URL` on the server wins. Only change it when Supertext gives you another address. |
 | Languages | the suggestion | Per site: Supertext language (a select of Supertext's list; preselected with the site's language or its default, `de` → `de-DE`; *— choose —* where there is none), form of address (only where Supertext offers it) and *Translation review* (off by default, see [Translation review](#translation-review)). `config/supertext-translation.php` → `languages` overrides it. See [Languages](#languages). |
+| Save translations as drafts | Off | Off: translations are saved into the target site directly, keeping its status (live if it was live). On: entries are translated into a draft of the target site, named *Supertext: <site name>*, for editors to review and apply; the live entry stays unchanged until then. Categories, global sets and assets have no drafts and are saved directly. |
+| Point links to the translated pages | On | Links to this website's own entries and categories (reference tags in CKEditor text and Link fields, and addresses of the source site's pages) point to the same page in the target site. Off: links stay as in the source. |
 | Timeout | 180 | Seconds to wait for the translation of one site. |
 | Send version information to Supertext | On | See [Version information and the API key check](#version-information-and-the-api-key-check). The environment variable `SUPERTEXT_VERSION_REPORTS=0` (or `false`, `off`, `no`) on the server turns it off regardless of the setting (`1` turns it on). |
+
+![The Saving section of the settings: Save translations as drafts (off), Point links to the translated pages (on) and the note about images in CKEditor text](images/13-settings-saving.png)
+
+**Localized images** need no setting: when a translation is overwritten, a site's own images in CKEditor text are kept as long as the source's image in that place doesn't change. *Utilities → Supertext images* lists them and the ones to check; it needs the *Utilities → Supertext images* permission (administrators have it).
 
 Translated slugs follow Craft's own slug rules: set `limitAutoSlugsToAscii` in `config/general.php` to get `chocolat-suisse-expedie` instead of `chocolat-suisse-expédié`.
 
@@ -204,6 +210,10 @@ The index action *Translate with Supertext* (entries, categories, assets) transl
 | *Timed out waiting for the Supertext translation* | Very long content. Raise *Timeout* (and PHP's `max_execution_time`). |
 | *The file is too large (at most 10 MB)* for a smaller file | PHP's `upload_max_filesize` or `post_max_size` is lower than the file; raise them. |
 | *This file belongs to another system* / *This file wasn't exported by the Supertext plugin* | The file comes from another Supertext plugin, or the translation tool removed the file's header (HTML: the `supertext:` meta tags; XLIFF: the `<file>` attributes). Export again and keep them. |
+| No *Open draft* link, the live entry was changed | *Save translations as drafts* is off, or the content is a category, global set or asset (no drafts in Craft). |
+| A link still points to the source site's page | *Point links to the translated pages* is off, the page doesn't exist in the target site, or the address isn't one of the source site's pages (another site, a redirect, a page Craft doesn't route). |
+| *Utilities → Supertext images* is missing | The user lacks the utility's permission (*Utilities → Supertext images* under *General* in the user group's permissions). |
+| A localized image was replaced by the source's | The source's image in that place was replaced (the site gets the new one, marked *to check*), or images were added or removed in that site only. Put the site's image back and click *Mark as checked*. |
 | A field isn't translated | Its Translation Method is *Not translatable*, or its type isn't supported (see above). |
 | Bulk translations don't run | The queue isn't running (see *Background translation*). Failed jobs show the reason in *Utilities → Queue Manager*. |
 

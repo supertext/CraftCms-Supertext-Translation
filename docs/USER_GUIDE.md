@@ -62,6 +62,25 @@ Sites that already have their own text are not ticked, and show **Already transl
 
 "Its own text" means: at least one translatable field differs from the source site.
 
+### Your own images are kept
+
+Images in CKEditor text stay as each site has them: if a site has its own image in a place (say, a screenshot with German labels in the German site), overwriting the translation keeps it, with the newly translated alternative text, as long as the source's image in that place hasn't changed. If the source's image was replaced, the site gets the new one and the image is marked **to check**. After translating, the box shows *N image(s) to check* with a link to *Utilities → Supertext images*:
+
+![Utilities → Supertext images: the page About us in Deutsch, Français and Italiano, the source's image beside each site's, all marked Same as the source; filters All, To check, Own image, Same as the source](images/14-images-utility.png)
+
+- The list shows every image Supertext translated, the source's image beside the site's, with its status: *To check*, *Own image* or *Same as the source*, and why an image needs checking.
+- Replace the image in that site if it needs a localized version, then click **Mark as checked**. The site's image at that moment is then remembered as its own (or as the source's, if it's the same).
+
+Images added or removed by hand in one site only can't be lined up with the source's: that site gets the source's images, and those that change are marked *to check*.
+
+## Links point to the translated pages
+
+Links to your website's own entries and categories point to the same page in the target site: a link to *About us* in the English text becomes a link to *Über uns* in the German site, in CKEditor text and in Link fields. Addresses typed by hand (`https://example.com/en/about#team`) are turned into such links too, with the anchor and query kept, so they keep working when the translated page's address changes later. Links to other websites, and to pages that don't exist in the target site, stay as they are. An administrator can turn this off (*Point links to the translated pages*).
+
+## Translations as drafts
+
+If your administrator turned on *Save translations as drafts*, entries are translated into a draft of the target site, named *Supertext: Deutsch* (the site's name), instead of the site's live content. The box says *saved as a draft* with an **Open draft** link: review the draft and click *Apply draft* when it's ready. Until then the site's live entry stays as it was. Categories, global sets and assets have no drafts in Craft and are still saved directly.
+
 ## Translate with a file (XLIFF or HTML)
 
 Instead of translating with Supertext's API, you can download the texts of an entry (category, global set, image) as a file, have them translated elsewhere (a translator, a translation tool such as Trados, memoQ or Phrase, or Supertext's web app) and import the translated file again. The translations are saved exactly like a translation with Supertext: in the target site's version of the entry, as a new revision.
@@ -110,11 +129,11 @@ Progress and errors appear in Craft's queue indicator (bottom left); failed jobs
 | Slug (entries, categories) | Translated as words and turned back into a slug, e.g. `swiss-chocolate-shipped-worldwide` → `schweizer-schokolade-weltweit-versandt`. A one-word slug stays as it is. |
 | Alternative text (images) | Translated, if the volume translates it per site |
 | Plain Text fields | Translated, line breaks kept |
-| CKEditor (and Redactor) fields | Translated as HTML: headings, bold, italic, links and lists stay in place, link addresses are kept |
+| CKEditor (and Redactor) fields | Translated as HTML: headings, bold, italic, links and lists stay in place. Links to your own pages point to the target site's page (see [Links](#links-point-to-the-translated-pages)), other addresses are kept. Images: the source's, unless the site has its own (see [Your own images are kept](#your-own-images-are-kept)). |
 | Entries inside a CKEditor field | Their title and fields are translated. If the CKEditor field is translated per site, each site has its own copies of these entries: the target site's entries are updated in the same order, missing ones are copied from the source, and ones the target no longer needs are deleted. |
 | Matrix fields | The title and the fields above of each nested entry are translated |
 | Table fields | Cells of *Single-line text*, *Multi-line text* and *Row heading* columns are translated; other cells (numbers, dates, checkboxes, …) stay as they are. If the target has a different number of rows, it gets the source's rows. |
-| Link fields | The label (and the title text and ARIA label, if the field shows them) are translated; the address stays |
+| Link fields | The label (and the title text and ARIA label, if the field shows them) are translated; a link to one of your own entries or categories points to the target site's page, other addresses stay |
 | SEOmatic fields | Texts you wrote yourself (SEO title, description, keywords, image description and their Facebook/Twitter versions) are translated; texts SEOmatic takes from other fields or templates (`{{ … }}`) stay as they are |
 | Fields that are *Not translatable* | Not touched (they are the same in every site) |
 | Other field types (numbers, dates, assets, relations, dropdowns, …) | Not translated |
@@ -127,6 +146,8 @@ Empty fields are skipped.
 | --- | --- |
 | *Supertext is not set up yet: …* | No API key. Ask your administrator. |
 | *already translated, skipped* | The site has its own text and *Overwrite existing translations* was off. |
+| *saved as a draft – Open draft* | *Save translations as drafts* is on: the translation is in a draft of that site. Open it, review it and apply it. |
+| *N image(s) to check* | The source's image in a place was replaced while the site had its own, or the site's images no longer matched the source's. Open the link (*Utilities → Supertext images*). |
 | *You are not allowed to edit this content in this site.* | Your user group may not edit that site, or the section (category group, global set, volume). |
 | *This content is not available in this site.* | The entry (image, …) isn't saved to that site. |
 | *This content exists in no other site you can edit.* | There is no other site to translate into, or you may not edit any of them. |

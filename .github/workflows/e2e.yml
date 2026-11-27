@@ -140,6 +140,8 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/craft_live
           EDITOR_EMAIL: ${{ env.DEMO_EDITOR_EMAIL }}
           EDITOR_PASSWORD: ${{ env.DEMO_EDITOR_PASSWORD }}
+          ADMIN_EMAIL: ${{ env.DEMO_ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ env.DEMO_ADMIN_PASSWORD }}
         run: node live.mjs
 
       # --- 2. Docs screenshots: real translations (stand-in only without the key) ----------

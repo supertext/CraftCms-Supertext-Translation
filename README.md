@@ -10,6 +10,8 @@ Open an entry, tick the sites to translate into and click **Translate**: the tit
 - Rich text (CKEditor) keeps its headings, bold text, links and lists; whole sentences are translated
 - Translated slugs, so translated pages get translated URLs
 - Sites with their own text are kept unless the editor explicitly overwrites them
+- Links to your own pages point to the same page in the target language; localized images (e.g. screenshots) are kept when a translation is updated, listed under *Utilities → Supertext images*
+- Saved directly into the site (default) or, with *Save translations as drafts*, as a draft to review and apply
 - Categories, global sets and assets (title and alternative text) too, with the same box
 - Bulk translation from the entry, category and asset indexes (in the queue)
 - *Export for translation* (XLIFF 1.2 or HTML) and *Import translation*: translate an entry (category, global set, asset) outside the API, with a translator, a translation tool or Supertext's web app

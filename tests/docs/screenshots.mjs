@@ -141,7 +141,24 @@ async function shot(page, locator, name, margin = 10) {
   await go(page, '/admin/settings/plugins/supertext-translation')
   const table = page.locator('[data-supertext-languages]')
   await shot(page, table, '07-settings-languages.png', 16)
+  // The "Saving" section: drafts, links and the note about images.
+  const saving = await page.evaluate(() => {
+    const h = [...document.querySelectorAll('#content h2, #main-content h2')].find((e) => e.textContent.trim() === 'Saving')
+    if (!h) return null
+    const parts = [h]
+    for (let n = h.nextElementSibling; n && n.tagName !== 'H2' && n.tagName !== 'HR'; n = n.nextElementSibling) parts.push(n)
+    const rs = parts.map((e) => e.getBoundingClientRect()).filter((r) => r.height > 0)
+    const x = Math.min(...rs.map((r) => r.left)), y = Math.min(...rs.map((r) => r.top))
+    return { x, y: y + window.scrollY, width: Math.max(...rs.map((r) => r.right)) - x, height: Math.max(...rs.map((r) => r.bottom)) - y }
+  })
+  if (saving) {
+    await page.screenshot({ path: OUT + '13-settings-saving.png', fullPage: true, clip: { x: Math.max(0, saving.x - 16), y: Math.max(0, saving.y - 16), width: saving.width + 32, height: saving.height + 32 } })
+  }
   await page.setViewportSize({ width: 1280, height: 900 })
+
+  // Utilities → Supertext images, after the page "About us" (with an image) was translated.
+  await go(page, '/admin/utilities/supertext-images')
+  await shot(page, page.locator('#content').first(), '14-images-utility.png', 0)
 
   await go(page, '/admin/settings/sites')
   // Show the public demo's address instead of the local one.

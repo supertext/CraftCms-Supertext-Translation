@@ -219,17 +219,19 @@ for (const site of targets) {
 
 // --- The other content: page (entry nested in CKEditor, table, link), category, global set, image ---
 /** Translates the item into every target site with the Supertext box on its edit page. */
-async function translateWithBox(label, url) {
+async function translateWithBox(label, url, sites = targets, overwrite = false) {
 	await page.goto(`${B}${url}`);
 	const box = page.locator('.supertext-box');
 	await box.locator('.st-translate, .supertext-body > p').first().waitFor();
-	for (const site of targets) await tick(box, `st-site-${site.id}`);
+	for (const site of sites) await tick(box, `st-site-${site.id}`);
+	if (overwrite) await tick(box, 'st-overwrite');
 	await box.locator('.st-translate').click();
 	await box.locator('.st-results li').first().waitFor({ timeout: 900_000 });
 	await page.screenshot({ path: `${artifacts}${label}-result.png`, fullPage: true });
 	const ok = await box.locator('.st-results li.ok').count();
 	const errors = await box.locator('.st-results li.error').allTextContents();
-	check(`${label}: every site translated`, ok === targets.length, `${ok}/${targets.length} ${errors.join(' | ')}`);
+	check(`${label}: every site translated`, ok === sites.length, `${ok}/${sites.length} ${errors.join(' | ')}`);
+	return box;
 }
 
 /** Every text of an element in one site: title, alternative text and the strings in its content. */
@@ -272,6 +274,63 @@ if (pageEntry) {
 		const callouts = ids.length ? await q('SELECT es.title FROM elements_sites es WHERE es."elementId" = ANY($1) AND es."siteId" = $2', [ids, site.id]) : [];
 		check(`page ${site.handle}: nested callout of its own, translated`, callouts.length === 1 && callouts[0].title && callouts[0].title !== 'Free delivery', JSON.stringify(callouts));
 	}
+}
+
+// --- Links follow the language; a site's own images stay ----------------------------------
+const pageContent = async (siteId) => (await q('SELECT content::text AS c FROM elements_sites WHERE "elementId" = $1 AND "siteId" = $2', [pageEntry.id, siteId]))[0]?.c ?? '';
+if (pageEntry) {
+	for (const site of targets) {
+		const c = await pageContent(site.id);
+		check(`links ${site.handle}: the entry link and the article's address point to the article in ${site.handle}`, count(c, `{entry:${article.id}@${site.id}:url`) === 2, c.match(/\{entry:[^}]*\}/g)?.join(' '));
+		check(`links ${site.handle}: none still points to the ${sourceSite.handle} site`, !c.includes(`@${sourceSite.id}:url`));
+		check(`images ${site.handle}: the image is the source's`, /<img src=\\"\{asset:\d+:url/.test(c));
+	}
+	// An editor puts a localized screenshot into the first target's page; translating again keeps it.
+	const local = targets[0];
+	const before = await pageContent(local.id);
+	const src = before.match(/<img src=\\"(\{asset:[^"\\]*\})/)?.[1];
+	const localized = 'https://www.supertext.com/demo-screenshot-' + local.handle + '.png';
+	if (check(`images ${local.handle}: image found in the page`, !!src, before.slice(0, 200))) {
+		await q('UPDATE elements_sites SET content = replace(content::text, $3, $4)::jsonb WHERE "elementId" = $1 AND "siteId" = $2', [pageEntry.id, local.id, src, localized]);
+		const box = await translateWithBox('page-again', `/admin/content/entries/pages/${pageEntry.id}?site=${sourceSite.handle}`, [local], true);
+		const after = await pageContent(local.id);
+		check(`images ${local.handle}: the localized image stays after translating again`, after.includes(localized) && !after.includes(src), after.match(/<img[^>]*>/)?.[0]);
+		const [record] = await q('SELECT images FROM supertext_images WHERE "elementId" = $1 AND "siteId" = $2', [pageEntry.id, local.id]);
+		check(`images ${local.handle}: recorded as the site's own image`, JSON.parse(record?.images ?? '[]')[0]?.status === 'own', record?.images);
+		check(`images ${local.handle}: no image to check`, !(await box.locator('.st-results').textContent()).includes('to check'));
+	}
+}
+
+// --- Save translations as drafts (admin turns it on; the editor translates; nothing live changes) ---
+if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+	const admin = await browser.newPage({ viewport: { width: 1280, height: 1000 }, locale: 'en-US' });
+	const setDrafts = async (on) => {
+		await admin.goto(`${B}/admin/settings/plugins/supertext-translation`);
+		const toggle = admin.locator('#settings-saveAsDrafts, button[id$="saveAsDrafts"]').first();
+		if ((await toggle.getAttribute('aria-checked')) !== String(on)) await toggle.click();
+		await admin.locator('button[type=submit].submit, button.submit').first().click();
+		await admin.waitForLoadState('networkidle');
+	};
+	await admin.goto(`${B}/admin/login`);
+	await admin.locator('input.login-username').first().fill(process.env.ADMIN_EMAIL);
+	await admin.locator('input.login-password').first().fill(process.env.ADMIN_PASSWORD);
+	await admin.locator('button[type=submit]').first().click();
+	await admin.waitForURL(/\/admin\/(?!login)/, { timeout: 30_000 });
+	await setDrafts(true);
+	const site = targets[0];
+	const liveBefore = await q(`SELECT es.title, es.content::text AS c FROM elements_sites es WHERE es."elementId" = $1 AND es."siteId" = $2`, [article.id, site.id]);
+	const box = await translateWithBox('drafts', `/admin/content/entries/articles/${article.id}?site=${sourceSite.handle}`, [site], true);
+	check('drafts: the result offers the draft', (await box.locator('.st-results li.ok a').first().textContent())?.trim() === 'Open draft');
+	const liveAfter = await q(`SELECT es.title, es.content::text AS c FROM elements_sites es WHERE es."elementId" = $1 AND es."siteId" = $2`, [article.id, site.id]);
+	check('drafts: the live entry is unchanged', JSON.stringify(liveAfter) === JSON.stringify(liveBefore));
+	const drafts = await q(`SELECT d.name, es.title FROM drafts d JOIN elements el ON el."draftId" = d.id JOIN elements_sites es ON es."elementId" = el.id AND es."siteId" = $2
+		WHERE d."canonicalId" = $1 AND el."dateDeleted" IS NULL`, [article.id, site.id]);
+	const siteName = (await q('SELECT name FROM sites WHERE id = $1', [site.id]))[0]?.name;
+	check(`drafts: a draft "Supertext: ${siteName}" with the translation`, drafts.some((d) => d.name === `Supertext: ${siteName}` && d.title), JSON.stringify(drafts));
+	await setDrafts(false);
+	await admin.close();
+} else {
+	console.log('note: ADMIN_EMAIL / ADMIN_PASSWORD not set, the drafts check is skipped');
 }
 
 await browser.close();

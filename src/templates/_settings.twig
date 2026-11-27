@@ -158,6 +158,28 @@
 
 <hr>
 
+<h2>{{ 'Saving'|t('supertext-translation') }}</h2>
+
+{{ forms.lightswitchField({
+    label: 'Save translations as drafts'|t('supertext-translation'),
+    instructions: 'Off: a translation is saved into the site directly, which keeps its status (live if it was live). On: entries are translated into a draft of the site named “Supertext: Deutsch”, to review and apply; categories, global sets and assets have no drafts and are still saved directly.'|t('supertext-translation'),
+    id: 'saveAsDrafts',
+    name: 'saveAsDrafts',
+    on: settings.saveAsDrafts,
+}) }}
+
+{{ forms.lightswitchField({
+    label: 'Point links to the translated pages'|t('supertext-translation'),
+    instructions: 'Links to this website’s own entries and categories (in CKEditor text, Link fields, and as addresses of the site’s pages) point to the same page in the target site.'|t('supertext-translation'),
+    id: 'translateLinks',
+    name: 'translateLinks',
+    on: settings.translateLinks,
+}) }}
+
+<p class="light">{{ 'Images in CKEditor text: overwriting a translation keeps a site’s own images (such as localized screenshots) as long as the source’s image in that place doesn’t change. See Utilities → Supertext images.'|t('supertext-translation') }}</p>
+
+<hr>
+
 {{ forms.lightswitchField({
     label: 'Send version information to Supertext'|t('supertext-translation'),
     instructions: 'Sends the site URL and the versions of this plugin, the CMS and the runtime to Supertext when you save these settings and after an update, so Supertext support can see which version you run. No content, no API key and no personal data are sent.'|t('supertext-translation'),

@@ -71,6 +71,12 @@ http
     const html = file.html.replace(/(<div data-st-id="\d+">)([\s\S]*?)(<\/div>\n)/g, (all, open, inner, close) => {
       const hit = known.get(norm(inner)) ?? known.get(norm(decode(inner)))
       if (hit !== undefined) return open + (known.has(norm(inner)) ? hit : encode(hit)) + close
+      // Texts with addresses that differ per demo (entry and asset reference tags, the site's URL):
+      // samples.json writes them as @@0@@, @@1@@, … in order; the request's addresses are put back.
+      const addresses = []
+      const tokenized = inner.replace(/(href|src)="([^"]*)"/g, (m, name, value) => `${name}="@@${addresses.push(value) - 1}@@"`)
+      const pattern = addresses.length ? known.get(norm(tokenized)) : undefined
+      if (pattern !== undefined) return open + pattern.replace(/@@(\d+)@@/g, (m, i) => addresses[Number(i)] ?? m) + close
       return open + inner.replace(/>([^<]+)</g, (m, t) => (t.trim() ? `>[${file.target}] ${t}<` : m)).replace(/^([^<]+)/, `[${file.target}] $1`) + close
     })
     send(200, html, 'text/html')

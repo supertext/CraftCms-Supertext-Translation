@@ -10,6 +10,7 @@ namespace supertext\crafttranslation\migrations;
 
 use craft\db\Migration;
 use craft\db\Table;
+use supertext\crafttranslation\records\ImageRecord;
 use supertext\crafttranslation\records\TranslationRecord;
 use supertext\crafttranslation\services\Reporting;
 
@@ -36,12 +37,14 @@ class Install extends Migration
             $this->addForeignKey(null, TranslationRecord::TABLE, ['userId'], Table::USERS, ['id'], 'SET NULL');
         }
         m261014_000000_supertext_state::createStateTable($this);
+        m261128_000000_images::createImagesTable($this);
 
         return true;
     }
 
     public function safeDown(): bool
     {
+        $this->dropTableIfExists(ImageRecord::TABLE);
         $this->dropTableIfExists(Reporting::STATE_TABLE);
         $this->dropTableIfExists(TranslationRecord::TABLE);
 
