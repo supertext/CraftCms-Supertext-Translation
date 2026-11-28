@@ -59,6 +59,7 @@ class FilesController extends Controller
                 (int) $request->getRequiredBodyParam('siteId'),
                 $targets,
                 $format,
+                Craft::$app->getUser()->getIdentity(),
             );
         } catch (SupertextException $e) {
             return $this->asFailure(Messages::of($e));

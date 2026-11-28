@@ -133,7 +133,7 @@ Editors need, in their user group (*Settings → Users → User Groups*):
 - *Access the control panel*, *Edit* permission for **each site** they translate into (*Sites → Edit "Deutsch"*, …)
 - The section's *View entries* and *Save entries* (and *View/Save other authors' entries* if the entries aren't theirs); for categories, global sets and assets the matching permissions of the category group (*Save categories*), global set (*Edit "Footer"*) or volume (*Save assets*, and *Save assets uploaded by other users*)
 
-The plugin checks that the editor may save the entry (category, global set, asset) in every target site before anything is sent to Supertext. Sites they can't edit don't appear in the Supertext box.
+The plugin checks that the editor may view the entry (category, global set, asset) in its source site and save it in every target site before anything is sent to Supertext or exported; content they can't view is reported as not found. Sites they can't edit don't appear in the Supertext box.
 
 **Export for translation / Import translation** (XLIFF 1.2 or HTML files, in the Supertext box) need the same permission; an import saves only into sites where the editor may save the entry, each entry and site in the file is checked. Uploads are limited to 10 MB (PHP's `upload_max_filesize` and `post_max_size` must allow that much, or larger files are refused earlier) and are only read in memory, never stored. There is nothing to configure, and no API key is needed for files.
 

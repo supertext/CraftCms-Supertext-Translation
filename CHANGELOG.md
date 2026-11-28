@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Security
+
+- The Supertext box, translating and *Export for translation* check that the editor may view the content in its source site (Craft's own view permissions). Before, an editor with the Supertext permission could export the texts of entries in sections they can't view.
+
 ## 1.3.0 — 2026-11-27
 
 ### Added

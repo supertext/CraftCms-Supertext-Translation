@@ -101,7 +101,7 @@ class Translator extends Component
     public function describe(ElementInterface $element, ?User $user = null): array
     {
         $source = $this->elementInSite((int) $element->id, (int) $element->siteId);
-        if (!$source) {
+        if (!$source || !$this->mayView($source, $user)) {
             throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
         $sourceUnits = $this->collectUnits($source);
@@ -134,7 +134,7 @@ class Translator extends Component
     public function translate(int $elementId, int $sourceSiteId, array $targetSiteIds, bool $overwrite, ?User $user = null): array
     {
         $source = $this->elementInSite($elementId, $sourceSiteId);
-        if (!$source) {
+        if (!$source || !$this->mayView($source, $user)) {
             throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
         if ($user && !$user->can(Plugin::PERMISSION)) {
@@ -214,11 +214,11 @@ class Translator extends Component
      * @param list<int> $targetSiteIds
      * @return array{content: string, filename: string, contentType: string}|null
      */
-    public function exportFile(int $elementId, int $sourceSiteId, array $targetSiteIds, string $format): ?array
+    public function exportFile(int $elementId, int $sourceSiteId, array $targetSiteIds, string $format, ?User $user = null): ?array
     {
         $source = $this->elementInSite($elementId, $sourceSiteId);
         $sourceSite = Craft::$app->getSites()->getSiteById($sourceSiteId);
-        if (!$source || !$sourceSite) {
+        if (!$source || !$sourceSite || !$this->mayView($source, $user)) {
             throw new SupertextException(Craft::t('supertext-translation', 'This content was not found.'));
         }
 
@@ -992,7 +992,16 @@ class Translator extends Component
     }
 
     /** The element in the given site (any status; entries also as drafts), if the plugin translates its type. */
-    public function elementInSite(int $id, int $siteId): ?ElementInterface
+    /**
+     * Whether $user may view the element (Craft's own rules: sections, sites, drafts). Without a
+     * user (console commands) always. Elements the user can't view are reported as not found.
+     */
+    private function mayView(ElementInterface $element, ?User $user): bool
+    {
+        return $user === null || Craft::$app->getElements()->canView($element, $user);
+    }
+
+        public function elementInSite(int $id, int $siteId): ?ElementInterface
     {
         $type = Craft::$app->getElements()->getElementTypeById($id);
         if ($type === null || !\in_array($type, self::ELEMENT_TYPES, true)) {
